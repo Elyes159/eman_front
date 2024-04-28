@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:untitled2/page/page/favoris.dart';
 import 'package:untitled2/page/page/home.dart';
-import 'package:untitled2/page/page/panier.dart';
 import 'package:untitled2/page/parametre.dart';
 import 'package:untitled2/page/recheche.dart';
 
 class CategoryPage4 extends StatelessWidget {
-
   final List<Map<String, dynamic>> categories = [
     {'title': 'Eléctromenagers', 'imagePath': 'assets/images/menager.png'},
     {'title': 'TV', 'imagePath': 'assets/images/tele.png'},
@@ -68,8 +66,8 @@ class CategoryPage4 extends StatelessWidget {
                       contentPadding: EdgeInsets.symmetric(vertical: 10.0),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30.0),
-                        borderSide: BorderSide(
-                            color: Color(0xFF006583), width: 1.2),
+                        borderSide:
+                            BorderSide(color: Color(0xFF006583), width: 1.2),
                       ),
                       filled: true,
                       fillColor: Color(0xFF9ebcc0),
@@ -90,10 +88,9 @@ class CategoryPage4 extends StatelessWidget {
               color: Color(0xFF006583),
               child: ListView.separated(
                 padding:
-                const EdgeInsets.symmetric(horizontal: 21, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 21, vertical: 10),
                 scrollDirection: Axis.horizontal,
-                separatorBuilder: (context, index) =>
-                    SizedBox(width: 20),
+                separatorBuilder: (context, index) => SizedBox(width: 20),
                 itemCount: categories.length,
                 itemBuilder: (context, index) {
                   return Column(
@@ -104,8 +101,8 @@ class CategoryPage4 extends StatelessWidget {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
                           color: Colors.white,
-                          border: Border.all(
-                              color: Colors.transparent, width: 1.2),
+                          border:
+                              Border.all(color: Colors.transparent, width: 1.2),
                         ),
                         child: Image.asset(
                           categories[index]['imagePath'] as String,
@@ -159,12 +156,12 @@ class CategoryPage4 extends StatelessWidget {
           selectedLabelStyle: TextStyle(color: Color(0xFF006E7F)),
           type: BottomNavigationBarType.fixed,
           items: [
-            bottomNavigationBarItem(
-              image: 'assets/images/pani.png',
-              label: 'Panier',
-              context: context,
-              page: PanierPage(),
-            ),
+            // bottomNavigationBarItem(
+            //   image: 'assets/images/pani.png',
+            //   label: 'Panier',
+            //   context: context,
+            //   page: PanierPage(),
+            // ),
             bottomNavigationBarItem(
               image: 'assets/images/recherche.png',
               label: 'Recherche',
@@ -241,6 +238,7 @@ class _GridBState extends State<GridB> {
     showFullTitles = List.generate(4, (_) => false);
     favoriteStates = List.generate(4, (_) => false);
   }
+
   void toggleFavoriteState(int index) {
     setState(() {
       favoriteStates[index] = !favoriteStates[index];
@@ -268,7 +266,6 @@ class _GridBState extends State<GridB> {
         "imagePath": "assets/images/poche.jpg",
         "discount": "-55%",
       },
-
     ];
 
     return Column(
@@ -361,7 +358,7 @@ class _GridBState extends State<GridB> {
                                 ),
                                 Transform.translate(
                                   offset: Offset(-2, -1),
-                                  child:Text(
+                                  child: Text(
                                     'TND ${_calculateDiscountedPrice(item['price'], item['discount'])}',
                                     style: TextStyle(
                                       decoration: TextDecoration.lineThrough,
@@ -371,14 +368,10 @@ class _GridBState extends State<GridB> {
                                     ),
                                   ),
                                 ),
-
                               ],
                             ),
-
-
                             Transform.translate(
                               offset: Offset(-6, -1),
-
                               child: Text(
                                 title,
                                 maxLines: 2,
@@ -399,11 +392,11 @@ class _GridBState extends State<GridB> {
                                 icon: Icon(
                                   CupertinoIcons.cart,
                                   size: 18,
-                                  color: Color(0xFF006583), // Couleur de l'icône du panier
+                                  color: Color(
+                                      0xFF006583), // Couleur de l'icône du panier
                                 ),
                               ),
                             ),
-
                           ],
                         ),
                       ),
@@ -429,7 +422,8 @@ class _GridBState extends State<GridB> {
                     ),
                   ),
                   Positioned(
-                    top: 17, // Ajustez la position supérieure de l'icône de cœur
+                    top:
+                        17, // Ajustez la position supérieure de l'icône de cœur
                     right: 10,
                     child: GestureDetector(
                       onTap: () {
@@ -437,7 +431,9 @@ class _GridBState extends State<GridB> {
                         toggleFavoriteState(index);
                       },
                       child: Image.asset(
-                        isFavorite ? 'assets/images/cor.png' : 'assets/images/hear.png', // Changez le chemin de l'image en fonction de l'état du produit favori
+                        isFavorite
+                            ? 'assets/images/cor.png'
+                            : 'assets/images/hear.png', // Changez le chemin de l'image en fonction de l'état du produit favori
                         width: 22,
                         height: 22,
                       ),
@@ -450,16 +446,16 @@ class _GridBState extends State<GridB> {
         ),
       ],
     );
-
   }
 
   String _calculateDiscountedPrice(String price, String discount) {
     double originalPrice = double.parse(price.substring(3));
     double discountPercentage = double.parse(discount.replaceAll('%', ''));
-    double discountedPrice = originalPrice -
-        (originalPrice * discountPercentage / 100);
+    double discountedPrice =
+        originalPrice - (originalPrice * discountPercentage / 100);
     return discountedPrice.toStringAsFixed(1);
   }
+
   static String _truncateTitle(String title, int maxLength) {
     if (title.length > maxLength) {
       int lastIndex = title.lastIndexOf(' ', maxLength);

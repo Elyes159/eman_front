@@ -3,12 +3,11 @@ import 'package:flutter/cupertino.dart';
 
 import 'package:untitled2/page/page/favoris.dart';
 import 'package:untitled2/page/page/home.dart';
-import 'package:untitled2/page/page/panier.dart';
+import 'package:untitled2/page/panier.dart';
 import 'package:untitled2/page/parametre.dart';
 import 'package:untitled2/page/recheche.dart';
 
 class CategoryPage1 extends StatelessWidget {
-
   final List<Map<String, dynamic>> categories = [
     {'title': 'Eléctromenagers', 'imagePath': 'assets/images/menager1.png'},
     {'title': 'TV', 'imagePath': 'assets/images/tele.png'},
@@ -25,174 +24,173 @@ class CategoryPage1 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-        home: Scaffold(
-          appBar: PreferredSize(
-            preferredSize: Size.fromHeight(145),
-            child: AppBar(
-              backgroundColor: Color(0xFF006583),
-              elevation: 0,
-              flexibleSpace: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: 45),
-                  Row(
+      home: Scaffold(
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(145),
+          child: AppBar(
+            backgroundColor: Color(0xFF006583),
+            elevation: 0,
+            flexibleSpace: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: 45),
+                Row(
+                  children: [
+                    Transform.translate(
+                      offset: Offset(24, 0),
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        scale: 6,
+                      ),
+                    ),
+                    Spacer(),
+                    Padding(
+                      padding: EdgeInsets.only(right: 15, top: 5),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.menu,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                        onPressed: () {
+                          print('Sidebar icon tapped');
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 15),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: TextFormField(
+                    decoration: InputDecoration(
+                      contentPadding: EdgeInsets.symmetric(vertical: 10.0),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30.0),
+                        borderSide:
+                            BorderSide(color: Color(0xFF006583), width: 1.2),
+                      ),
+                      filled: true,
+                      fillColor: Color(0xFF9ebcc0),
+                      hintText: 'Chercher un produit',
+                      hintStyle: TextStyle(color: Color(0xFF506d6e)),
+                      prefixIcon: Icon(Icons.search,
+                          size: 30, color: Color(0xFF506d6e)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        body: Stack(
+          children: [
+            Container(
+              color: Color(0xFF006583),
+              child: ListView.separated(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 21, vertical: 10),
+                scrollDirection: Axis.horizontal,
+                separatorBuilder: (context, index) => SizedBox(width: 20),
+                itemCount: categories.length,
+                itemBuilder: (context, index) {
+                  return Column(
                     children: [
-                      Transform.translate(
-                        offset: Offset(24, 0),
+                      SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.white,
+                          border:
+                              Border.all(color: Colors.transparent, width: 1.2),
+                        ),
                         child: Image.asset(
-                          'assets/images/logo.png',
-                          scale: 6,
+                          categories[index]['imagePath'] as String,
+                          width: 40,
+                          height: 40,
                         ),
                       ),
-                      Spacer(),
-                      Padding(
-                        padding: EdgeInsets.only(right: 15, top: 5),
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.menu,
-                            color: Colors.white,
-                            size: 40,
-                          ),
-                          onPressed: () {
-                            print('Sidebar icon tapped');
-                          },
+                      SizedBox(height: 10),
+                      Text(
+                        categories[index]['title'] as String,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
                       ),
                     ],
-                  ),
-                  SizedBox(height: 15),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: TextFormField(
-                      decoration: InputDecoration(
-                        contentPadding: EdgeInsets.symmetric(vertical: 10.0),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(30.0),
-                          borderSide: BorderSide(
-                              color: Color(0xFF006583), width: 1.2),
-                        ),
-                        filled: true,
-                        fillColor: Color(0xFF9ebcc0),
-                        hintText: 'Chercher un produit',
-                        hintStyle: TextStyle(color: Color(0xFF506d6e)),
-                        prefixIcon: Icon(Icons.search,
-                            size: 30, color: Color(0xFF506d6e)),
-                      ),
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
-          ),
-          body: Stack(
-              children: [
-                Container(
-                  color: Color(0xFF006583),
-                  child: ListView.separated(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 21, vertical: 10),
-                    scrollDirection: Axis.horizontal,
-                    separatorBuilder: (context, index) =>
-                        SizedBox(width: 20),
-                    itemCount: categories.length,
-                    itemBuilder: (context, index) {
-                      return Column(
-                        children: [
-                          SizedBox(height: 5),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              color: Colors.white,
-                              border: Border.all(
-                                  color: Colors.transparent, width: 1.2),
-                            ),
-                            child: Image.asset(
-                              categories[index]['imagePath'] as String,
-                              width: 40,
-                              height: 40,
-                            ),
-                          ),
-                          SizedBox(height: 10),
-                          Text(
-                            categories[index]['title'] as String,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+            Positioned.fill(
+              child: Transform.translate(
+                offset: Offset(0, 130),
+                child: SingleChildScrollView(
+                  child: Container(
+                    height: 800,
+                    decoration: BoxDecoration(
+                      color: Color(0xFFEFEFEF),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(50.0),
+                        // Radius pour les coins supérieurs
+                        bottom: Radius.circular(50.0),
+                        // Radius pour les coins inférieurs
+                      ),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(24.0),
+                      child: GridB(),
+                    ),
                   ),
                 ),
-                Positioned.fill(
-        child: Transform.translate(
-        offset: Offset(0, 130),
-    child: SingleChildScrollView(
-    child: Container(
-    height: 800,
-    decoration: BoxDecoration(
-    color: Color(0xFFEFEFEF),
-    borderRadius: BorderRadius.vertical(
-    top: Radius.circular(50.0),
-    // Radius pour les coins supérieurs
-    bottom: Radius.circular(50.0),
-    // Radius pour les coins inférieurs
-    ),
-    ),
-      child: Padding(
-        padding: EdgeInsets.all(24.0),
-        child: GridB(),
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          backgroundColor: Color(0xFFEFEFEF),
+          selectedItemColor: Color(0xFF006E7F),
+          unselectedItemColor: Color(0xFF006E7F),
+          selectedLabelStyle: TextStyle(color: Color(0xFF006E7F)),
+          type: BottomNavigationBarType.fixed,
+          items: [
+            // bottomNavigationBarItem(
+            //   image: 'assets/images/pani.png',
+            //   label: 'Panier',
+            //   context: context,
+            //   page: PanierPage(),
+            // ),
+            bottomNavigationBarItem(
+              image: 'assets/images/recherche.png',
+              label: 'Recherche',
+              context: context,
+              page: RecherchePage(),
+            ),
+            bottomNavigationBarItem(
+              image: 'assets/images/maison.png',
+              label: 'Accueil',
+              context: context,
+              page: Home(),
+            ),
+            bottomNavigationBarItem(
+              image: 'assets/images/heart.png',
+              label: 'Favoris',
+              context: context,
+              page: FavorisPage(),
+            ),
+            bottomNavigationBarItem(
+              image: 'assets/images/utilisateur.png',
+              label: 'Profil',
+              context: context,
+              page: ProfilePage(),
+            ),
+          ],
+        ),
       ),
-    ),
-    ),
-        ),
-                ),
-      ],
-    ),
-          bottomNavigationBar: BottomNavigationBar(
-            backgroundColor: Color(0xFFEFEFEF),
-            selectedItemColor: Color(0xFF006E7F),
-            unselectedItemColor: Color(0xFF006E7F),
-            selectedLabelStyle: TextStyle(color: Color(0xFF006E7F)),
-            type: BottomNavigationBarType.fixed,
-            items: [
-              bottomNavigationBarItem(
-                image: 'assets/images/pani.png',
-                label: 'Panier',
-                context: context,
-                page: PanierPage(),
-              ),
-              bottomNavigationBarItem(
-                image: 'assets/images/recherche.png',
-                label: 'Recherche',
-                context: context,
-                page: RecherchePage(),
-              ),
-              bottomNavigationBarItem(
-                image: 'assets/images/maison.png',
-                label: 'Accueil',
-                context: context,
-                page: Home(),
-              ),
-              bottomNavigationBarItem(
-                image: 'assets/images/heart.png',
-                label: 'Favoris',
-                context: context,
-                page: FavorisPage(),
-              ),
-              bottomNavigationBarItem(
-                image: 'assets/images/utilisateur.png',
-                label: 'Profil',
-                context: context,
-                page: ProfilePage(),
-              ),
-            ],
-          ),
-        ),
     );
   }
 
@@ -242,6 +240,7 @@ class _GridBState extends State<GridB> {
     showFullTitles = List.generate(4, (_) => false);
     favoriteStates = List.generate(4, (_) => false);
   }
+
   void toggleFavoriteState(int index) {
     setState(() {
       favoriteStates[index] = !favoriteStates[index];
@@ -283,7 +282,7 @@ class _GridBState extends State<GridB> {
         IconButton(
           onPressed: () {
             Navigator.push(
-                context,
+              context,
               MaterialPageRoute(builder: (context) => Home()),
             ); // Retour à la page précédente (page d'accueil)
           },
@@ -367,7 +366,7 @@ class _GridBState extends State<GridB> {
                                 ),
                                 Transform.translate(
                                   offset: Offset(-2, -1),
-                                  child:Text(
+                                  child: Text(
                                     'TND ${_calculateDiscountedPrice(item['price'], item['discount'])}',
                                     style: TextStyle(
                                       decoration: TextDecoration.lineThrough,
@@ -377,14 +376,10 @@ class _GridBState extends State<GridB> {
                                     ),
                                   ),
                                 ),
-
                               ],
                             ),
-
-
                             Transform.translate(
                               offset: Offset(-6, -1),
-
                               child: Text(
                                 title,
                                 maxLines: 2,
@@ -405,11 +400,11 @@ class _GridBState extends State<GridB> {
                                 icon: Icon(
                                   CupertinoIcons.cart,
                                   size: 18,
-                                  color: Color(0xFF006583), // Couleur de l'icône du panier
+                                  color: Color(
+                                      0xFF006583), // Couleur de l'icône du panier
                                 ),
                               ),
                             ),
-
                           ],
                         ),
                       ),
@@ -435,7 +430,8 @@ class _GridBState extends State<GridB> {
                     ),
                   ),
                   Positioned(
-                    top: 17, // Ajustez la position supérieure de l'icône de cœur
+                    top:
+                        17, // Ajustez la position supérieure de l'icône de cœur
                     right: 10,
                     child: GestureDetector(
                       onTap: () {
@@ -443,7 +439,9 @@ class _GridBState extends State<GridB> {
                         toggleFavoriteState(index);
                       },
                       child: Image.asset(
-                        isFavorite ? 'assets/images/cor.png' : 'assets/images/hear.png', // Changez le chemin de l'image en fonction de l'état du produit favori
+                        isFavorite
+                            ? 'assets/images/cor.png'
+                            : 'assets/images/hear.png', // Changez le chemin de l'image en fonction de l'état du produit favori
                         width: 22,
                         height: 22,
                       ),
@@ -456,16 +454,16 @@ class _GridBState extends State<GridB> {
         ),
       ],
     );
-
   }
 
   String _calculateDiscountedPrice(String price, String discount) {
     double originalPrice = double.parse(price.substring(3));
     double discountPercentage = double.parse(discount.replaceAll('%', ''));
-    double discountedPrice = originalPrice -
-        (originalPrice * discountPercentage / 100);
+    double discountedPrice =
+        originalPrice - (originalPrice * discountPercentage / 100);
     return discountedPrice.toStringAsFixed(1);
   }
+
   static String _truncateTitle(String title, int maxLength) {
     if (title.length > maxLength) {
       int lastIndex = title.lastIndexOf(' ', maxLength);

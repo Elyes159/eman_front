@@ -29,7 +29,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     };
     try {
       final resp = await http.post(
-        Uri.parse("http://192.168.1.22:3003/user/register"),
+        Uri.parse("http://192.168.1.17:3003/user/register"),
         headers: headers,
         body: jsonEncode({
           "firstname": _firstNameController.text,
@@ -260,10 +260,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     Text("Avez-vous déjà un compte?"),
                     TextButton(
                       onPressed: () {
-                        Navigator.pushNamed(
-                            context,
-                            SignInScreen
-                                .routeName); // Naviguer vers la page de connexion
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => SignInScreen()),
+                        ); // Naviguer vers la page de connexion
                       },
                       child: Text(
                         "Connectez-vous",

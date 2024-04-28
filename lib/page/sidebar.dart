@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:untitled2/page/connecte.dart';
+import 'package:untitled2/page/favourites.dart';
 
 import 'package:untitled2/page/parametre.dart';
-
-
+import 'package:http/http.dart' as http;
 
 class MyApp extends StatelessWidget {
   @override
@@ -10,10 +12,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Mon application',
       home: Scaffold(
-        appBar: AppBar(
-          iconTheme: IconThemeData(size: 52)
-           // Changer la taille de l'icône de menu
-        ),
+        appBar: AppBar(iconTheme: IconThemeData(size: 52)
+            // Changer la taille de l'icône de menu
+            ),
         endDrawer: NavBar(), // Utilisez endDrawer au lieu de drawer
       ),
     );
@@ -27,6 +28,47 @@ class NavBar extends StatefulWidget {
 
 class _NavBarState extends State<NavBar> {
   bool isCategoryExpanded = false;
+  void removeTokenFromSharedPreferences() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.remove('token');
+  }
+
+  Future<String?> getTokenFromSharedPreferences() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  Future<void> logoutFromServer(String token) async {
+    Map<String, String> headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token', // Envoyer le token dans les en-têtes
+    };
+
+    try {
+      final resp = await http.post(
+        Uri.parse("http://192.168.1.17:3003/user/logout"),
+        headers: headers,
+      );
+      if (resp.statusCode == 200) {
+        // Supprimer le token localement
+        removeTokenFromSharedPreferences();
+        print('Déconnexion réussie');
+      } else {
+        print('Erreur lors de la déconnexion: ${resp.statusCode}');
+      }
+    } catch (e) {
+      print('Erreur lors de la déconnexion: $e');
+    }
+  }
+
+  void performLogout() async {
+    String? token = await getTokenFromSharedPreferences();
+    if (token != null) {
+      await logoutFromServer(token);
+    } else {
+      print('Token non trouvé localement');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,35 +133,42 @@ class _NavBarState extends State<NavBar> {
             buildListTile(
               icon: Icons.favorite,
               title: 'Favoris',
-              onTap: () => null, // Ajouter la fonctionnalité pour les Favoris
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => FavoritesPage()),
+                );
+              }, // Ajouter la fonctionnalité pour les Favoris
             ),
             buildListTile(
               icon: Icons.shopping_cart,
               title: 'Suivre votre commande',
-              onTap: () => null, // Ajouter la fonctionnalité pour Suivre votre commande
+              onTap: () =>
+                  null, // Ajouter la fonctionnalité pour Suivre votre commande
             ),
             buildListTile(
               icon: Icons.local_offer,
               title: 'Coupons',
               onTap: () => null, // Ajouter la fonctionnalité pour les Coupons
             ),
-      buildListTile(
-  icon: Icons.settings,
-  title: 'Paramètres',
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => ProfilePage()),
-    );
-  }, // Ajouter la fonctionnalité pour les Paramètres
-),
+            buildListTile(
+              icon: Icons.settings,
+              title: 'Paramètres',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ProfilePage()),
+                );
+              }, // Ajouter la fonctionnalité pour les Paramètres
+            ),
 
             buildListTile(
               icon: Icons.category,
               title: 'Catégorie',
               onTap: () {
                 setState(() {
-                  isCategoryExpanded = !isCategoryExpanded; // Basculer l'état d'expansion
+                  isCategoryExpanded =
+                      !isCategoryExpanded; // Basculer l'état d'expansion
                 });
               },
             ),
@@ -173,7 +222,8 @@ class _NavBarState extends State<NavBar> {
             buildListTile(
               icon: Icons.notifications,
               title: 'Notification',
-              onTap: () => null, // Ajouter la fonctionnalité pour les Notifications
+              onTap: () =>
+                  null, // Ajouter la fonctionnalité pour les Notifications
               trailing: ClipOval(
                 child: Container(
                   color: Colors.red,
@@ -194,7 +244,13 @@ class _NavBarState extends State<NavBar> {
             buildListTile(
               icon: Icons.exit_to_app,
               title: 'Déconnexion',
-              onTap: () => null,
+              onTap: () async {
+                performLogout();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => SignInScreen()),
+                );
+              },
             ),
           ],
         ),

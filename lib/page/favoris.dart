@@ -4,9 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:untitled2/page/page/home.dart';
-import 'package:untitled2/page/page/panier.dart';
+import 'package:untitled2/page/page/productpage.dart';
 import 'package:untitled2/page/parametre.dart';
-import 'package:untitled2/page/productpage.dart';
 import 'package:untitled2/page/recheche.dart';
 
 class MyApp extends StatelessWidget {
@@ -166,12 +165,12 @@ class _FavorisPageState extends State<FavorisPage> {
           selectedLabelStyle: TextStyle(color: Color(0xFF006E7F)),
           type: BottomNavigationBarType.fixed,
           items: [
-            bottomNavigationBarItem(
-              image: 'assets/images/pani.png',
-              label: 'Panier',
-              context: context,
-              page: PanierPage(),
-            ),
+            // bottomNavigationBarItem(
+            //   image: 'assets/images/pani.png',
+            //   label: 'Panier',
+            //   context: context,
+            //   page: PanierPage(),
+            // ),
             bottomNavigationBarItem(
               image: 'assets/images/recherche.png',
               label: 'Recherche',
@@ -321,7 +320,19 @@ class _GridBState extends State<GridB> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ProductPage(item['title']),
+                    builder: (context) => ProductPage(
+                      title: item['title'],
+                      id: item['_id'],
+                      name: item['name'],
+                      description: item['description'],
+                      price: item['price'],
+                      brands: item['brands'],
+                      cupons: item['cupons'],
+                      disponibilite: item['disponibilite'],
+                      caracteristique: item['caracteristique'],
+                      image: item['image'],
+                      type: item['type'],
+                    ),
                   ),
                 );
               },

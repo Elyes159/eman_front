@@ -1,11 +1,40 @@
-import 'package:flutter/material.dart';
-import 'package:untitled2/page/page/panier.dart';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:untitled2/page/favourites.dart';
+import 'package:untitled2/page/home.dart';
+import 'package:http/http.dart' as http;
+import 'package:untitled2/page/panier.dart';
 
 class ProductPage extends StatefulWidget {
   final String title;
+  final String id;
+  final String name;
+  final String description;
+  final int price;
+  final String brands;
+  final String cupons;
+  final bool disponibilite;
+  final String caracteristique;
+  final String image;
+  final String type;
 
-  ProductPage(this.title);
+  ProductPage({
+    required this.title,
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.price,
+    required this.brands,
+    required this.cupons,
+    required this.disponibilite,
+    required this.caracteristique,
+    required this.image,
+    required this.type,
+  });
 
   @override
   _ProductPageState createState() => _ProductPageState();
@@ -14,7 +43,6 @@ class ProductPage extends StatefulWidget {
 class _ProductPageState extends State<ProductPage> {
   String selectedImage = 'assets/images/TV1.jpg';
 
-
   int number = 1;
   bool isFavorited = false;
   double prixActuel = 799; // Prix actuel du produit
@@ -22,13 +50,115 @@ class _ProductPageState extends State<ProductPage> {
   double calculerPrixAvantRemise() {
     return prixActuel / (1 - (pourcentageRemise / 100));
   }
+
   void changeSelectedImage(String newImage) {
     setState(() {
       selectedImage = newImage;
     });
   }
+
+  List<dynamic> favoriteProducts = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchFavoriteProducts();
+  }
+
+  Future<void> fetchFavoriteProducts() async {
+    String? token = await getTokenFromSharedPreferences();
+    if (token != null) {
+      String? userId = await getUserIdFromToken(token);
+      if (userId != null) {
+        String apiUrl = "http://192.168.1.17:3003/user/favorites/$userId";
+        try {
+          final response = await http.get(Uri.parse(apiUrl));
+          if (response.statusCode == 200) {
+            setState(() {
+              favoriteProducts = jsonDecode(response.body);
+              isLoading = false;
+            });
+          } else {
+            print(
+                "Erreur lors de la récupération des produits favoris: ${response.statusCode}");
+          }
+        } catch (e) {
+          print("Erreur lors de la récupération des produits favoris: $e");
+        }
+      } else {
+        print('Impossible de récupérer l\'ID de l\'utilisateur');
+      }
+    } else {
+      print('Token non trouvé localement');
+    }
+  }
+
+  Future<String?> getTokenFromSharedPreferences() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  Future<String?> getUserIdFromToken(String token) async {
+    Map<String, String> headers = {
+      'Content-Type': 'application/json',
+    };
+
+    try {
+      final resp = await http.get(
+        Uri.parse("http://192.168.1.17:3003/user/getByToken/$token"),
+        headers: headers,
+      );
+      if (resp.statusCode == 200) {
+        final userData = jsonDecode(resp.body);
+        final userId = userData['_id'] as String;
+        return userId;
+      } else {
+        print(
+            'Erreur lors de la récupération de l\'ID de l\'utilisateur: ${resp.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération de l\'ID de l\'utilisateur: $e');
+      return null;
+    }
+  }
+
+  Future<void> addToCart(String userId, String productId) async {
+    String? token =
+        await getTokenFromSharedPreferences(); // Récupérer le token de l'utilisateur depuis les préférences partagées
+    if (token != null) {
+      Map<String, String> headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token', // Envoyer le token dans les en-têtes
+      };
+
+      try {
+        final resp = await http.put(
+          Uri.parse(
+              "http://192.168.1.17:3003/user/add-to-cart/$userId/$productId"),
+          headers: headers,
+        );
+        if (resp.statusCode == 200) {
+          print('Produit ajouté au panier avec succès');
+        } else if (resp.statusCode == 400) {
+          print('Le produit existe déjà dans le panier');
+        } else if (resp.statusCode == 404) {
+          print('Utilisateur ou produit non trouvé');
+        } else {
+          print('Erreur: ${resp.statusCode}');
+        }
+      } catch (e) {
+        print('Erreur: $e');
+      }
+    } else {
+      print('Token non trouvé localement');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    Uint8List bytes = base64Decode(widget.image);
     return Scaffold(
       backgroundColor: Color(0xFF006E7F),
       appBar: PreferredSize(
@@ -49,7 +179,6 @@ class _ProductPageState extends State<ProductPage> {
                         scale: 7,
                       ),
                     ),
-                    
                     Spacer(),
                     Transform.translate(
                       offset: Offset(-10, 25),
@@ -133,7 +262,9 @@ class _ProductPageState extends State<ProductPage> {
                         right: 10,
                         child: IconButton(
                           icon: Icon(
-                            isFavorited ? Icons.favorite : Icons.favorite_border,
+                            isFavorited
+                                ? Icons.favorite
+                                : Icons.favorite_border,
                             color: isFavorited ? Colors.red : Colors.grey,
                           ),
                           onPressed: () {
@@ -150,11 +281,10 @@ class _ProductPageState extends State<ProductPage> {
                         right: 7,
                         bottom: 10,
                         child: Center(
-                          child: Image.asset(
-                            selectedImage,
+                          child: Image.memory(
+                            bytes,
                             width: 300,
-                            height: 270,
-                            fit: BoxFit.cover,
+                            height: 300,
                           ),
                         ),
                       ),
@@ -164,9 +294,32 @@ class _ProductPageState extends State<ProductPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      buildImageSelector('assets/images/TV3.png', changeSelectedImage),
-                      buildImageSelector('assets/images/TV3.png', changeSelectedImage),
-                      buildImageSelector('assets/images/TV3.png', changeSelectedImage),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Image.memory(
+                            bytes,
+                            width: 50,
+                            height: 50,
+                          ),
+                          SizedBox(
+                            width: 20,
+                          ),
+                          Image.memory(
+                            bytes,
+                            width: 50,
+                            height: 50,
+                          ),
+                          SizedBox(
+                            width: 20,
+                          ),
+                          Image.memory(
+                            bytes,
+                            width: 50,
+                            height: 50,
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                   SizedBox(height: 15),
@@ -188,7 +341,7 @@ class _ProductPageState extends State<ProductPage> {
                       Transform.translate(
                         offset: Offset(28, 14),
                         child: Text(
-                          '${prixActuel.toStringAsFixed(0)}',
+                          "${widget.price}",
                           style: TextStyle(
                             color: Color(0xFF006583),
                             fontSize: 28,
@@ -211,24 +364,24 @@ class _ProductPageState extends State<ProductPage> {
                       ),
                       Transform.translate(
                         offset: Offset(40, 14),
-                      child: Positioned(
-                        top: 10,
-                        left: 12,
-                        child: Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Color(0xFFF6D776),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '-11%', // discount
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 11,
+                        child: Positioned(
+                          top: 10,
+                          left: 12,
+                          child: Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Color(0xFFF6D776),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '-11%', // discount
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontSize: 11,
+                              ),
                             ),
                           ),
                         ),
-                      ),
                       ),
                     ],
                   ),
@@ -238,12 +391,11 @@ class _ProductPageState extends State<ProductPage> {
                       Transform.translate(
                         offset: Offset(33, 18),
                         child: Text(
-                          'TV SAMSUNG 32'' SMART-LED HD-T5300',
+                          widget.title,
                           style: TextStyle(
                             color: Colors.black,
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
-
                           ),
                         ),
                       ),
@@ -280,24 +432,35 @@ class _ProductPageState extends State<ProductPage> {
                           ),
                         ),
                       ),
-                      Transform.translate(
-                        offset: Offset(33, 18),
-                        child: Text(
-                          'Disponible',
-                          style: TextStyle(
-                            color: Colors.green,
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
+                      widget.disponibilite == true
+                          ? Transform.translate(
+                              offset: Offset(33, 18),
+                              child: Text(
+                                'Disponible',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ))
+                          : Transform.translate(
+                              offset: Offset(33, 18),
+                              child: Text(
+                                'Stockout',
+                                style: TextStyle(
+                                  color: Color.fromARGB(255, 235, 3, 3),
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )),
                       Transform.translate(
                         offset: Offset(43, 18),
                         child: Row(
                           // Pour minimiser l'espace
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            ElevatedButton( // Utilisation d'ElevatedButton pour le bouton de soustraction
+                            ElevatedButton(
+                              // Utilisation d'ElevatedButton pour le bouton de soustraction
                               onPressed: () {
                                 if (number > 1) {
                                   setState(() {
@@ -306,12 +469,16 @@ class _ProductPageState extends State<ProductPage> {
                                 }
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Color(0xFFF6D776), // Couleur de fond
+                                backgroundColor:
+                                    Color(0xFFF6D776), // Couleur de fond
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6), // Bordure arrondie
+                                  borderRadius: BorderRadius.circular(
+                                      6), // Bordure arrondie
                                 ),
-                                padding: EdgeInsets.all(6), // Ajustement de l'espacement interne
-                                minimumSize: Size(15, 15), // Taille minimale du bouton
+                                padding: EdgeInsets.all(
+                                    6), // Ajustement de l'espacement interne
+                                minimumSize:
+                                    Size(15, 15), // Taille minimale du bouton
                               ),
                               child: Icon(
                                 Icons.remove,
@@ -319,29 +486,34 @@ class _ProductPageState extends State<ProductPage> {
                                 color: Colors.black,
                               ),
                             ),
-                  SizedBox(width: 5),
-                  Text(
-                    number.toString(),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
                             SizedBox(width: 5),
-                            ElevatedButton( // Utilisation d'ElevatedButton pour le bouton d'addition
+                            Text(
+                              number.toString(),
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                            SizedBox(width: 5),
+                            ElevatedButton(
+                              // Utilisation d'ElevatedButton pour le bouton d'addition
                               onPressed: () {
                                 setState(() {
                                   number++;
                                 });
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Color(0xFFF6D776), // Couleur de fond
+                                backgroundColor:
+                                    Color(0xFFF6D776), // Couleur de fond
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6), // Bordure arrondie
+                                  borderRadius: BorderRadius.circular(
+                                      6), // Bordure arrondie
                                 ),
-                                padding: EdgeInsets.all(5), // Ajustement de l'espacement interne
-                                minimumSize: Size(10,10), // Taille minimale du bouton
+                                padding: EdgeInsets.all(
+                                    5), // Ajustement de l'espacement interne
+                                minimumSize:
+                                    Size(10, 10), // Taille minimale du bouton
                               ),
                               child: Icon(
                                 Icons.add,
@@ -356,7 +528,7 @@ class _ProductPageState extends State<ProductPage> {
                   ),
 
                   SizedBox(height: 12),
-                  Row(
+                  Column(
                     children: [
                       Transform.translate(
                         offset: Offset(33, 18),
@@ -369,63 +541,95 @@ class _ProductPageState extends State<ProductPage> {
                           ),
                         ),
                       ),
-                      SizedBox(height: 12),
-                      Transform.translate(
-                        offset: Offset(-45, 80),
-                     child: Positioned(
-                        bottom: 20,
-                        left: 20,
-                        child: Container(
-                          height: 45,
-                          width: 300,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(25), // BorderRadius pour le coin arrondi
-                            color: Color(0xFF006E7F), // Couleur de fond
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.7), // Couleur de l'ombre
-                                spreadRadius: 2, // Rayon de propagation
-                                blurRadius: 5, // Rayon de flou
-                                offset: Offset(0, 2), // Décalage de l'ombre
+                      SizedBox(height: 50),
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => PanierPage(
+                                      id: widget.id,
+                                    )),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 30.0),
+                          child: Container(
+                            height: 45,
+                            width: 300,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(
+                                  25), // BorderRadius pour le coin arrondi
+                              color: Color(0xFF006E7F), // Couleur de fond
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey
+                                      .withOpacity(0.7), // Couleur de l'ombre
+                                  spreadRadius: 2, // Rayon de propagation
+                                  blurRadius: 5, // Rayon de flou
+                                  offset: Offset(0, 2), // Décalage de l'ombre
+                                ),
+                              ],
+                            ),
+                            child: MaterialButton(
+                              onPressed: () async {
+                                String? token =
+                                    await getTokenFromSharedPreferences();
+                                print(token);
+                                if (token != null) {
+                                  String? userId =
+                                      await getUserIdFromToken(token);
+                                  if (userId != null) {
+                                    // Ici, vous pouvez remplacer "productId" par l'ID réel du produit que vous souhaitez ajouter au panier
+                                    String productId = widget.id;
+                                    await addToCart(userId, productId);
+                                  } else {
+                                    print(
+                                        'Impossible de récupérer l\'ID de l\'utilisateur');
+                                  }
+                                } else {
+                                  print('Token non trouvé localement');
+                                }
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => PanierPage(
+                                            id: widget.id,
+                                          )),
+                                );
+                              },
+                              child: Text(
+                                'Ajouter au panier',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ],
-                          ),
-                          child: TextButton(
-                            onPressed: () {
-                              
-                            },
-                            child: Text(
-                              'Ajouter au panier',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ),
-                      ),
-                      ),
                     ],
                   ),
-                  SizedBox(height: 110), // Ajouter un espace
+                  SizedBox(height: 110),
                   Container(
                     margin: EdgeInsets.symmetric(horizontal: 30),
                     height: 1, // Hauteur de la ligne
                     color: Colors.grey, // Couleur de la ligne
                   ),
                   SizedBox(height: 8), // Ajouter un espace
-            Transform.translate(
-              offset: Offset(33, 18),
-              child: Text(
-                    'Caractéristiques', // Texte à afficher
-                    style: TextStyle(
-                      color: Color(0xFF006E7F), // Couleur du texte
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                  Transform.translate(
+                    offset: Offset(33, 18),
+                    child: Text(
+                      'Caractéristiques', // Texte à afficher
+                      style: TextStyle(
+                        color: Color(0xFF006E7F), // Couleur du texte
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-            ),
                   SizedBox(height: 15),
                   // Affichage du prix
                   Row(
@@ -944,9 +1148,12 @@ class _ProductPageState extends State<ProductPage> {
                           ReadMoreText(
                             'Visionnez votre feuilleton préféré tout en profitant\nd’une très bonne qualité d’image, grâce à ce télév-\niseur Smart HD de la grande marque coréenne,\nSamsung.\nBénéficier d’une image nette et claire grâce à la\ntechnologie wide color enhancer lumineux et dyn-\namique, afin de plonger dans des images aux\ncouleurs éclatantes, avec ce TV Samsung prix\nTunisie de 32 pouces.',
                             trimLines: 5,
-                            textAlign: TextAlign.justify, // Définir le textAlign à TextAlign.justify
-                            trimMode: TrimMode.Length, // Utiliser le TrimMode.Line
-                            trimCollapsedText: "Voir Plus", // Texte pour "Afficher plus"
+                            textAlign: TextAlign
+                                .justify, // Définir le textAlign à TextAlign.justify
+                            trimMode:
+                                TrimMode.Length, // Utiliser le TrimMode.Line
+                            trimCollapsedText:
+                                "Voir Plus", // Texte pour "Afficher plus"
                             trimExpandedText: "Voir Moins",
                             // Texte pour "Afficher moins"
 
@@ -959,7 +1166,7 @@ class _ProductPageState extends State<ProductPage> {
 
                             moreStyle: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color:Color(0xFF006E7F), // Couleur du texte
+                              color: Color(0xFF006E7F), // Couleur du texte
                               fontSize: 16,
                               height: 1.5,
                             ),
@@ -1157,38 +1364,41 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 }
-Widget buildImageSelector(String imagePath, Function(String) changeSelectedImage) {
+
+Widget buildImageSelector(
+    String imagePath, Function(String) changeSelectedImage) {
   return GestureDetector(
     onTap: () {
       changeSelectedImage(imagePath);
     },
-  child: Positioned(
-  top: 0,
-  left: 0,
-  right: 7,
-  bottom: 10,
-  child: Container(
-      margin: EdgeInsets.only(right: 10),
-      width: 70,
-      height: 70,
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: Color(0xFF9F9F9F),
-          width: 1,
+    child: Positioned(
+      top: 0,
+      left: 0,
+      right: 7,
+      bottom: 10,
+      child: Container(
+        margin: EdgeInsets.only(right: 10),
+        width: 70,
+        height: 70,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Color(0xFF9F9F9F),
+            width: 1,
+          ),
+        ),
+        child: Image.asset(
+          imagePath,
+          width: 20,
+          height: 20,
+          fit: BoxFit.cover,
         ),
       ),
-      child: Image.asset(
-        imagePath,
-        width: 20,
-        height: 20,
-        fit: BoxFit.cover,
-      ),
     ),
-  ),
   );
 }
+
 class ReadMoreText extends StatefulWidget {
   final String text;
   final int trimLines;
@@ -1201,17 +1411,17 @@ class ReadMoreText extends StatefulWidget {
   final TrimMode trimMode;
 
   ReadMoreText(
-      this.text, {
-        Key? key,
-        required this.trimLines,
-        this.trimCollapsedText = 'Show More',
-        this.trimExpandedText = 'Show Less',
-        required this.style,
-        required this.lessStyle,
-        required this.moreStyle,
-        this.textAlign = TextAlign.left,
-        this.trimMode = TrimMode.Line,
-      }) : super(key: key);
+    this.text, {
+    Key? key,
+    required this.trimLines,
+    this.trimCollapsedText = 'Show More',
+    this.trimExpandedText = 'Show Less',
+    required this.style,
+    required this.lessStyle,
+    required this.moreStyle,
+    this.textAlign = TextAlign.left,
+    this.trimMode = TrimMode.Line,
+  }) : super(key: key);
 
   @override
   _ReadMoreTextState createState() => _ReadMoreTextState();
@@ -1239,7 +1449,9 @@ class _ReadMoreTextState extends State<ReadMoreText> {
       builder: (context, size) {
         final span = TextSpan(text: widget.text, style: widget.style);
         final tp = TextPainter(
-            text: span, maxLines: widget.trimLines, textDirection: TextDirection.ltr);
+            text: span,
+            maxLines: widget.trimLines,
+            textDirection: TextDirection.ltr);
         tp.layout(maxWidth: size.maxWidth);
 
         if (!tp.didExceedMaxLines && widget.trimMode == TrimMode.Line) {
@@ -1261,10 +1473,14 @@ class _ReadMoreTextState extends State<ReadMoreText> {
                 child: Padding(
                   padding: const EdgeInsets.only(right: 40.0),
                   child: Text(
-                    _isExpanded ? widget.trimExpandedText : widget.trimCollapsedText,
+                    _isExpanded
+                        ? widget.trimExpandedText
+                        : widget.trimCollapsedText,
                     style: _isExpanded
-                        ? widget.lessStyle.copyWith(decoration: TextDecoration.underline)
-                        : widget.moreStyle.copyWith(decoration: TextDecoration.underline),
+                        ? widget.lessStyle
+                            .copyWith(decoration: TextDecoration.underline)
+                        : widget.moreStyle
+                            .copyWith(decoration: TextDecoration.underline),
                   ),
                 ),
               ),

@@ -4,17 +4,19 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:untitled2/page/CategoryPage1.dart';
 import 'package:untitled2/page/CategoryPage2.dart';
 import 'package:untitled2/page/CategoryPage3.dart';
 import 'package:untitled2/page/CategoryPage4.dart';
 import 'package:untitled2/page/CategoryPage5.dart';
 import 'package:untitled2/page/favoris.dart';
+import 'package:untitled2/page/page/home.dart';
 import 'package:untitled2/page/page/notification.dart';
-import 'package:untitled2/page/page/panier.dart';
 import 'package:untitled2/page/page/productpage.dart';
 import 'package:untitled2/page/recheche.dart';
 import 'package:untitled2/page/sidebar.dart';
+import 'dart:typed_data';
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -42,7 +44,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-
 class Home extends StatefulWidget {
   const Home({Key? key}) : super(key: key);
 
@@ -56,60 +57,71 @@ class _HomeState extends State<Home> {
   TextEditingController _rechercheController = TextEditingController();
   List<dynamic> _searchResults = [];
 
+  void recherche() async {
+    Map<String, String> headers = {
+      'Content-Type': 'application/json',
+    };
 
-void recherche() async {
-  Map<String, String> headers = {
-    'Content-Type': 'application/json',
-  };
-  
-  try {
-    final resp = await http.post(
-      Uri.parse("http://192.168.1.22:3003/product/recherche"),
-      headers: headers,
-      body: jsonEncode({
-        "terme": _rechercheController.text
-      }),
-    );
-    
-    if (resp.statusCode == 200) {
-      List<dynamic> decodedResponse = jsonDecode(resp.body);
-      List<dynamic> searchResults = decodedResponse;
-      setState(() {
-        _searchResults = searchResults;
-      });
-      print(_searchResults);
-    } else {
-      print('Erreur ${resp.statusCode}');
+    try {
+      final resp = await http.post(
+        Uri.parse("http://192.168.1.17:3003/product/recherche"),
+        headers: headers,
+        body: jsonEncode({"terme": _rechercheController.text}),
+      );
+
+      if (resp.statusCode == 200) {
+        List<dynamic> decodedResponse = jsonDecode(resp.body);
+        List<dynamic> searchResults = decodedResponse;
+        setState(() {
+          _searchResults = searchResults;
+        });
+        print(_searchResults);
+      } else {
+        print('Erreur ${resp.statusCode}');
+      }
+    } catch (e) {
+      print('Erreur: $e');
     }
-  } catch (e) {
-    print('Erreur: $e');
   }
-}
-
-
-
 
   int pageNo = 0;
   Timer? carasouelTmer;
 
-  Timer getTimer() {
-    return Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (pageNo == 4) {
-        pageNo = 0;
-      }
-      pageController.animateToPage(
-        pageNo,
-        duration: const Duration(seconds: 1),
-        curve: Curves.easeInOutCirc,
-      );
-      pageNo++;
-    });
+  // Timer getTimer() {
+  //   return Timer.periodic(const Duration(seconds: 2), (timer) {
+  //     if (pageNo == 4) {
+  //       pageNo = 0;
+  //     }
+  //     pageController.animateToPage(
+  //       pageNo,
+  //       duration: const Duration(seconds: 1),
+  //       curve: Curves.easeInOutCirc,
+  //     );
+  //     pageNo++;
+  //   });
+  // }
+
+  late Future<List<dynamic>> futureProducts;
+  late List<bool> favoriteStates;
+
+  Future<List<dynamic>> getProducts() async {
+    final response =
+        await http.get(Uri.parse("http://192.168.1.17:3003/product/products"));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as List<dynamic>;
+      favoriteStates = List.generate(data.length,
+          (_) => false); // Generate favoriteStates based on data length
+      return data;
+    } else {
+      throw Exception('Failed to get data: ${response.statusCode}');
+    }
   }
 
   @override
   void initState() {
     pageController = PageController(initialPage: 0, viewportFraction: 0.85);
-    carasouelTmer = getTimer();
+    // carasouelTmer = getTimer();
     _scrollController.addListener(() {
       if (_scrollController.position.userScrollDirection ==
           ScrollDirection.reverse) {
@@ -120,7 +132,10 @@ void recherche() async {
         setState(() {});
       }
     });
+
     super.initState();
+    futureProducts = getProducts();
+    favoriteStates = [];
   }
 
   @override
@@ -224,6 +239,114 @@ void recherche() async {
       "height": 60.0,
     },
   ];
+  Future<String?> getTokenFromSharedPreferences() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  Future<void> addToFavorites(String userId, String productId) async {
+    String? token =
+        await getTokenFromSharedPreferences(); // Obtenez le token de l'utilisateur depuis les préférences partagées
+
+    if (token != null) {
+      Map<String, String> headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token', // Envoyer le token dans les en-têtes
+      };
+
+      try {
+        final resp = await http.put(
+          Uri.parse("http://:3003/user/add-to-favorites/$userId/$productId"),
+          headers: headers,
+        );
+        if (resp.statusCode == 200) {
+          print('Produit ajouté aux favoris avec succès');
+        } else if (resp.statusCode == 400) {
+          print('Le produit existe déjà dans les favoris');
+        } else if (resp.statusCode == 404) {
+          print('Utilisateur ou produit non trouvé');
+        } else {
+          print('Erreur: ${resp.statusCode}');
+        }
+      } catch (e) {
+        print('Erreur: $e');
+      }
+    } else {
+      print('Token non trouvé localement');
+    }
+  }
+
+  Future<String?> getUserIdFromToken(String token) async {
+    Map<String, String> headers = {
+      'Content-Type': 'application/json',
+    };
+
+    try {
+      final resp = await http.get(
+        Uri.parse("http://:3003/user/getByToken/$token"),
+        headers: headers,
+      );
+      if (resp.statusCode == 200) {
+        // Analyser la réponse JSON pour extraire le userId
+        final userData = jsonDecode(resp.body);
+        final userId = userData['_id'] as String;
+        return userId;
+      } else {
+        print('Erreur lors de la récupération du userId: ${resp.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération du userId: $e');
+      return null;
+    }
+  }
+
+  Future<void> removeFromFavorites(String userId, String productId) async {
+    String? token =
+        await getTokenFromSharedPreferences(); // Récupérer le token de l'utilisateur
+    if (token != null) {
+      Map<String, String> headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token', // Envoyer le token dans les en-têtes
+      };
+
+      try {
+        final resp = await http.delete(
+          Uri.parse(
+              "http://:3003/user/remove-from-favorites/$userId/$productId"),
+          headers: headers,
+        );
+        if (resp.statusCode == 200) {
+          print('Produit retiré des favoris avec succès');
+        } else if (resp.statusCode == 400) {
+          print("Le produit n'existe pas dans les favoris");
+        } else if (resp.statusCode == 404) {
+          print('Utilisateur non trouvé');
+        } else {
+          print('Erreur: ${resp.statusCode}');
+        }
+      } catch (e) {
+        print('Erreur: $e');
+      }
+    } else {
+      print('Token non trouvé localement');
+    }
+  }
+
+  void toggleFavoriteState(int index, String userId, String products) {
+    setState(() {
+      // Vous pouvez maintenant utiliser userId pour ajouter ou supprimer le produit des favoris pour cet utilisateur
+      favoriteStates[index] = !favoriteStates[index];
+
+      // Ajouter ou supprimer le produit des favoris dans la base de données en utilisant le userId
+      if (favoriteStates[index]) {
+        addToFavorites(userId, products); // Ajouter le produit aux favoris
+      } else {
+        removeFromFavorites(
+            userId, products); // Supprimer le produit des favoris
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -269,9 +392,8 @@ void recherche() async {
                 SizedBox(height: 15),
                 Row(
                   children: [
-                    
                     Container(
-                      width: 350,
+                      width: 300,
                       padding: EdgeInsets.symmetric(horizontal: 20),
                       child: TextFormField(
                         controller: _rechercheController,
@@ -279,8 +401,8 @@ void recherche() async {
                           contentPadding: EdgeInsets.symmetric(vertical: 10.0),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(30.0),
-                            borderSide:
-                                BorderSide(color: Color(0xFF006583), width: 1.2),
+                            borderSide: BorderSide(
+                                color: Color(0xFF006583), width: 1.2),
                           ),
                           filled: true,
                           fillColor: Color(0xFF9ebcc0),
@@ -291,12 +413,27 @@ void recherche() async {
                         ),
                       ),
                     ),
-                    IconButton(onPressed: (){
-
-                      recherche();
-
-                    }, icon: Icon(Icons.search)),
+                    IconButton(
+                      onPressed: () async {
+                        recherche();
+                      },
+                      icon: Icon(Icons.search),
+                    ),
                   ],
+                ),
+                const SizedBox(height: 10),
+                // Display search results here
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _searchResults.length,
+                    itemBuilder: (context, index) {
+                      // Render each search result item
+                      return ListTile(
+                        title: Text(_searchResults[index]['name']),
+                        subtitle: Text(_searchResults[index]['description']),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
@@ -484,185 +621,99 @@ void recherche() async {
                               children: [
                                 Container(
                                   margin: EdgeInsets.only(right: 14.0),
-                                  // Margin right ajouté
-                                  decoration: BoxDecoration(
+                                  decoration: const BoxDecoration(
                                     color: Color(0xFFFFD902),
-                                    // Couleur de fond du Container
                                     borderRadius: BorderRadius.only(
                                       topRight: Radius.circular(50.0),
-                                      // Border radius coin supérieur droit
-                                      bottomRight: Radius.circular(
-                                          50.0), // Border radius coin inférieur droit
+                                      bottomRight: Radius.circular(50.0),
                                     ),
                                   ),
                                   height: 430,
-                                  padding: EdgeInsets.symmetric(
+                                  padding: const EdgeInsets.symmetric(
                                       horizontal: 28.0, vertical: 15.0),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "Nouveautés",
-                                        style: TextStyle(
-                                          fontSize: 25.0,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(0, -4),
-                                        child: Text(
-                                          "Découvrez les derniers produits - SAMSUNG",
-                                          style: TextStyle(
-                                            fontSize: 12.0,
-                                            fontWeight: FontWeight.w600,
-                                            color: Color(0xFF666666),
-                                          ),
-                                        ),
-                                      ),
-                                      GestureDetector(
-                                        onTap: () {
-                                          // Action à effectuer lorsque le bouton "Voir plus" est pressé
-                                        },
-                                        child: Row(
+                                  child: FutureBuilder<List<dynamic>>(
+                                    future: futureProducts,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState ==
+                                          ConnectionState.waiting) {
+                                        return Center(
+                                            child: CircularProgressIndicator());
+                                      } else if (snapshot.hasError) {
+                                        return Center(
+                                            child: Text(
+                                                'Error: ${snapshot.error}'));
+                                      } else {
+                                        final List<dynamic> nouveautes =
+                                            snapshot.data!;
+                                        final List<dynamic> filteredNouveautes =
+                                            nouveautes
+                                                .where((item) =>
+                                                    item['type'] == 'Nouveauté')
+                                                .toList();
+
+                                        if (filteredNouveautes.isEmpty) {
+                                          return Container(); // Retourner une vue vide si aucune nouveauté n'est trouvée
+                                        }
+
+                                        // Convertir la chaîne de caractères en Uint8List
+                                        final Uint8List imageData =
+                                            base64Decode(
+                                                filteredNouveautes[0]['image']);
+
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
+                                            const Text(
+                                              "Nouveautés",
+                                              style: TextStyle(
+                                                fontSize: 25.0,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                             Transform.translate(
-                                              offset: Offset(0, -14),
-                                              child: Text(
-                                                "Voir plus",
+                                              offset: Offset(0, -4),
+                                              child: const Text(
+                                                "Découvrez les derniers produits",
                                                 style: TextStyle(
-                                                  fontSize: 13.0,
-                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12.0,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF666666),
+                                                ),
+                                              ),
+                                            ),
+                                            SizedBox(
+                                              height: 20,
+                                            ),
+                                            Transform.translate(
+                                              offset: Offset(0, -14),
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(10.0),
+                                                child: Image.memory(
+                                                  imageData,
+                                                  width: 100,
+                                                  fit: BoxFit.cover,
                                                 ),
                                               ),
                                             ),
                                             Transform.translate(
-                                              offset: Offset(0, -14),
-                                              child: IconButton(
-                                                onPressed: () {
-                                                  // Action à effectuer lorsque le bouton IconButton est pressé
-                                                },
-                                                icon: Icon(Icons.arrow_forward),
+                                              offset: Offset(-0.5, 10),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  // Afficher d'autres nouveautés ici en utilisant les données filtrées
+                                                ],
                                               ),
                                             ),
                                           ],
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(0, -14),
-                                        child: ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(10.0),
-                                          // Rayon du border radius pour l'image
-                                          child: Image.asset(
-                                            'assets/images/1.png',
-                                            // Chemin de l'image
-                                            fit: BoxFit
-                                                .cover, // Redimensionner l'image pour couvrir toute la largeur
-                                          ),
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(-0.5, 10),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Column(
-                                              children: [
-                                                Container(
-                                                  width: 90,
-                                                  height: 90,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/smart.png',
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4.0),
-                                                Text(
-                                                  "Galaxy Z Fold",
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Colors.black),
-                                                ),
-                                              ],
-                                            ),
-                                            SizedBox(width: 6.0),
-                                            Column(
-                                              children: [
-                                                Container(
-                                                  width: 90,
-                                                  height: 90,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/smartz.png',
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4.0),
-                                                Text(
-                                                  "Galaxy Z Flip",
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Colors.black),
-                                                ),
-                                              ],
-                                            ),
-                                            SizedBox(width: 6.0),
-                                            Column(
-                                              children: [
-                                                Container(
-                                                  width: 90,
-                                                  height: 90,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/ultra.png',
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4.0),
-                                                Text(
-                                                  "Galaxy S24 Ultra",
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Colors.black),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                                        );
+                                      }
+                                    },
                                   ),
-                                ),
+                                )
                               ],
                             ), //Fin de Nouveaute
                             SizedBox(
@@ -672,7 +723,7 @@ void recherche() async {
                               children: [
                                 Container(
                                   padding: EdgeInsets.symmetric(
-                                      horizontal: 25.0, vertical: 15.0),
+                                      horizontal: 1.0, vertical: 1.0),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -689,63 +740,243 @@ void recherche() async {
                                       ),
                                       SizedBox(height: 10),
                                       Container(
-                                        height: 200,
-                                        // Hauteur de votre ListView
-                                        child: ListView.builder(
-                                          scrollDirection: Axis.horizontal,
-                                          itemCount: categorie.length,
-                                          itemBuilder: (context, index) {
-                                            return Stack(
-                                              children: [
-                                                Container(
-                                                  width: 160,
-                                                  // Largeur du conteneur (plus petit que l'image)
-                                                  height: 160,
-                                                  // Hauteur du conteneur (plus petit que l'image)
-                                                  margin: EdgeInsets.symmetric(
-                                                      horizontal: 5),
-                                                  decoration: BoxDecoration(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            20),
-                                                    color: Colors
-                                                        .white, // Couleur de fond blanche pour chaque image
-                                                  ),
-                                                ),
-                                                Container(
-                                                  width: categorie[index][
-                                                      'width'], // Width of the image
-                                                  height: categorie[index][
-                                                      'height'], // Height of the image
-                                                  decoration: BoxDecoration(
-                                                    image: DecorationImage(
-                                                      image: AssetImage(categorie[
-                                                                  index]
-                                                              ['imagePath']
-                                                          as String), // Image path from the list
-                                                      fit: BoxFit
-                                                          .cover, // Cover the container with the image
-                                                    ),
-                                                  ),
-                                                ),
-                                                Positioned(
-                                                  bottom: 3,
-                                                  left: 25,
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 1.0, vertical: 1.0),
+                                        child: FutureBuilder<List<dynamic>>(
+                                          future: futureProducts,
+                                          builder: (context, snapshot) {
+                                            if (snapshot.connectionState ==
+                                                ConnectionState.waiting) {
+                                              return Center(
+                                                  child:
+                                                      CircularProgressIndicator());
+                                            } else if (snapshot.hasError) {
+                                              return Center(
                                                   child: Text(
-                                                    categorie[index]['title']
-                                                        as String,
-                                                    // Assuming 'title' is a key in your categorie map
-                                                    textAlign: TextAlign.center,
-                                                    style: TextStyle(
-                                                      fontSize: 18.0,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.black,
+                                                      'Error: ${snapshot.error}'));
+                                            } else {
+                                              final List<dynamic> categorie =
+                                                  snapshot.data!;
+                                              final filteredCategories =
+                                                  categorie
+                                                      .where((item) =>
+                                                          item['type'] ==
+                                                          "top categorie")
+                                                      .toList();
+
+                                              if (filteredCategories.isEmpty) {
+                                                return Container(); // Retourner une vue vide si aucune catégorie de type "Top Catégories" n'est trouvée
+                                              }
+
+                                              return Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  SizedBox(height: 10),
+                                                  Container(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            horizontal: 25.0,
+                                                            vertical: 15.0),
+                                                    child: FutureBuilder<
+                                                        List<dynamic>>(
+                                                      future: futureProducts,
+                                                      builder:
+                                                          (context, snapshot) {
+                                                        if (snapshot
+                                                                .connectionState ==
+                                                            ConnectionState
+                                                                .waiting) {
+                                                          return Center(
+                                                              child:
+                                                                  CircularProgressIndicator());
+                                                        } else if (snapshot
+                                                            .hasError) {
+                                                          return Center(
+                                                              child: Text(
+                                                                  'Error: ${snapshot.error}'));
+                                                        } else {
+                                                          final List<dynamic>
+                                                              gridMap =
+                                                              snapshot.data!;
+                                                          final filteredGridMap = gridMap
+                                                              .where((item) =>
+                                                                  item[
+                                                                      'type'] ==
+                                                                  "top categorie")
+                                                              .toList();
+
+                                                          if (filteredGridMap
+                                                              .isEmpty) {
+                                                            return Container(); // Retourner une vue vide si aucun produit de type "Meilleures Ventes" n'est trouvé
+                                                          }
+
+                                                          return Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .start,
+                                                            children: [
+                                                              GridView.builder(
+                                                                physics:
+                                                                    const NeverScrollableScrollPhysics(),
+                                                                shrinkWrap:
+                                                                    true,
+                                                                gridDelegate:
+                                                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                                                  crossAxisCount:
+                                                                      2,
+                                                                  crossAxisSpacing:
+                                                                      10.0,
+                                                                  mainAxisSpacing:
+                                                                      10.0,
+                                                                  mainAxisExtent:
+                                                                      200,
+                                                                ),
+                                                                itemCount:
+                                                                    filteredGridMap
+                                                                        .length,
+                                                                itemBuilder:
+                                                                    (_, index) {
+                                                                  final item =
+                                                                      filteredGridMap[
+                                                                          index];
+                                                                  final isFavorite =
+                                                                      favoriteStates[
+                                                                          index];
+                                                                  final String
+                                                                      imageDataString =
+                                                                      item[
+                                                                          'image']; // Supposons que les données binaires de l'image sont stockées dans un champ 'imageData' sous forme de chaîne de caractères
+
+                                                                  // Convertir la chaîne de caractères en Uint8List
+                                                                  final Uint8List
+                                                                      imageData =
+                                                                      base64Decode(
+                                                                          imageDataString); // Vous devez importer 'dart:convert' pour utiliser base64Decode
+
+                                                                  return GestureDetector(
+                                                                    onTap: () {
+                                                                      // Gérer l'action de clic sur un produit
+                                                                    },
+                                                                    child:
+                                                                        Container(
+                                                                      decoration:
+                                                                          BoxDecoration(
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(20.0),
+                                                                        color: Colors
+                                                                            .white,
+                                                                        boxShadow: [
+                                                                          BoxShadow(
+                                                                            color:
+                                                                                Colors.grey.withOpacity(0.5),
+                                                                            spreadRadius:
+                                                                                2,
+                                                                            blurRadius:
+                                                                                5,
+                                                                            offset:
+                                                                                Offset(0, 3), // changes position of shadow
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                      margin: EdgeInsets
+                                                                          .all(
+                                                                              8.0),
+                                                                      child:
+                                                                          Column(
+                                                                        crossAxisAlignment:
+                                                                            CrossAxisAlignment.start,
+                                                                        children: [
+                                                                          Padding(
+                                                                            padding:
+                                                                                const EdgeInsets.only(right: 8.0, top: 8),
+                                                                            child:
+                                                                                Center(
+                                                                              child: Align(
+                                                                                  alignment: Alignment.centerRight,
+                                                                                  child: GestureDetector(
+                                                                                    onTap: () async {
+                                                                                      String? token = await getTokenFromSharedPreferences(); // Récupérer le token de l'utilisateur
+                                                                                      if (token != null) {
+                                                                                        String? userId = await getUserIdFromToken(token); // Récupérer le userId à partir du token
+                                                                                        if (userId != null) {
+                                                                                          // String productId = products[index].id; // Récupérer l'ID du produit à partir de la liste des produits
+                                                                                          toggleFavoriteState(index, userId, item['_id']); // Appeler toggleFavoriteState avec index, userId et productId
+                                                                                        } else {
+                                                                                          print('Impossible de récupérer le userId');
+                                                                                        }
+                                                                                      } else {
+                                                                                        print('Token non trouvé localement');
+                                                                                      }
+                                                                                    },
+                                                                                    child: Image.asset(
+                                                                                      isFavorite ? 'assets/images/cor.png' : 'assets/images/hear.png',
+                                                                                      width: 24,
+                                                                                      height: 24,
+                                                                                    ),
+                                                                                  )),
+                                                                            ),
+                                                                          ),
+                                                                          Expanded(
+                                                                            child:
+                                                                                ClipRRect(
+                                                                              borderRadius: BorderRadius.vertical(
+                                                                                top: Radius.circular(20.0),
+                                                                              ),
+                                                                              child: Image.memory(
+                                                                                imageData, // Utilisez vos données binaires ici
+                                                                                fit: BoxFit.cover,
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                          Padding(
+                                                                            padding:
+                                                                                const EdgeInsets.all(8.0),
+                                                                            child:
+                                                                                Text(
+                                                                              item['title'],
+                                                                              maxLines: 2,
+                                                                              overflow: TextOverflow.ellipsis,
+                                                                              style: TextStyle(
+                                                                                fontWeight: FontWeight.w500,
+                                                                                color: Color(0xFF666666),
+                                                                                fontSize: 14,
+                                                                              ),
+                                                                            ),
+                                                                          ),
+                                                                          Padding(
+                                                                            padding:
+                                                                                const EdgeInsets.symmetric(horizontal: 8.0),
+                                                                            child:
+                                                                                Row(
+                                                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                              children: [
+                                                                                Text(
+                                                                                  'TND ${item['price']}',
+                                                                                  style: TextStyle(
+                                                                                    color: Color(0xFF006583),
+                                                                                    fontSize: 16,
+                                                                                    fontWeight: FontWeight.bold,
+                                                                                  ),
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    ),
+                                                                  );
+                                                                },
+                                                              ),
+                                                            ],
+                                                          );
+                                                        }
+                                                      },
                                                     ),
-                                                  ),
-                                                ),
-                                              ],
-                                            );
+                                                  )
+                                                ],
+                                              );
+                                            }
                                           },
                                         ),
                                       ),
@@ -760,198 +991,99 @@ void recherche() async {
                               children: [
                                 Container(
                                   margin: EdgeInsets.only(left: 14.0),
-                                  // Margin right ajouté
-                                  decoration: BoxDecoration(
+                                  decoration: const BoxDecoration(
                                     color: Color(0xFFac9ece),
-                                    // Couleur de fond du Container
                                     borderRadius: BorderRadius.only(
                                       topLeft: Radius.circular(50.0),
-                                      // Border radius coin supérieur droit
-                                      bottomLeft: Radius.circular(
-                                          50.0), // Border radius coin inférieur droit
+                                      bottomLeft: Radius.circular(50.0),
                                     ),
                                   ),
                                   height: 430,
-                                  padding: EdgeInsets.symmetric(
+                                  padding: const EdgeInsets.symmetric(
                                       horizontal: 28.0, vertical: 15.0),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Transform.translate(
-                                        offset: Offset(-1, 0),
-                                        child: Text(
-                                          "Gaming",
-                                          style: TextStyle(
-                                            fontSize: 25.0,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(0, -4),
-                                        child: Text(
-                                          "Plongez dans l'univers du Gaming",
-                                          style: TextStyle(
-                                            fontSize: 12.0,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ),
-                                      GestureDetector(
-                                        onTap: () {
-                                          // Action à effectuer lorsque le bouton "Voir plus" est pressé
-                                        },
-                                        child: Row(
+                                  child: FutureBuilder<List<dynamic>>(
+                                    future: futureProducts,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState ==
+                                          ConnectionState.waiting) {
+                                        return Center(
+                                            child: CircularProgressIndicator());
+                                      } else if (snapshot.hasError) {
+                                        return Center(
+                                            child: Text(
+                                                'Error: ${snapshot.error}'));
+                                      } else {
+                                        final List<dynamic> nouveautes =
+                                            snapshot.data!;
+                                        final List<dynamic> filteredNouveautes =
+                                            nouveautes
+                                                .where((item) =>
+                                                    item['type'] == 'gaming')
+                                                .toList();
+
+                                        if (filteredNouveautes.isEmpty) {
+                                          return Container(); // Retourner une vue vide si aucune nouveauté n'est trouvée
+                                        }
+
+                                        // Convertir la chaîne de caractères en Uint8List
+                                        final Uint8List imageData =
+                                            base64Decode(
+                                                filteredNouveautes[0]['image']);
+
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
+                                            const Text(
+                                              "Gaming",
+                                              style: TextStyle(
+                                                fontSize: 25.0,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                             Transform.translate(
-                                              offset: Offset(0, -14),
-                                              child: Text(
-                                                "Voir plus",
+                                              offset: Offset(0, -4),
+                                              child: const Text(
+                                                "Plongez dans l'univers de gaming",
                                                 style: TextStyle(
                                                   fontSize: 12.0,
                                                   fontWeight: FontWeight.w600,
-                                                  color: Colors.white,
+                                                  color: Color(0xFF666666),
                                                 ),
                                               ),
                                             ),
-                                            SizedBox(width: 5.0),
-                                            // Espacement entre le texte et l'icône
+                                            SizedBox(
+                                              height: 20,
+                                            ),
                                             Transform.translate(
                                               offset: Offset(0, -14),
-                                              child: IconButton(
-                                                onPressed: () {
-                                                  // Action à effectuer lorsque le bouton IconButton est pressé
-                                                },
-                                                icon: Image.asset(
-                                                  'assets/images/blanc.png',
-                                                  width: 20,
-                                                  // Ajustez la largeur selon vos besoins
-                                                  height:
-                                                      20, // Ajustez la hauteur selon vos besoins
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(10.0),
+                                                child: Image.memory(
+                                                  imageData,
+                                                  width: 100,
+                                                  fit: BoxFit.cover,
                                                 ),
                                               ),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(0, -14),
-                                        child: ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(10.0),
-                                          // Rayon du border radius pour l'image
-                                          child: Image.asset(
-                                            'assets/images/2.png',
-                                            // Chemin de l'image
-                                            fit: BoxFit
-                                                .cover, // Redimensionner l'image pour couvrir toute la largeur
-                                          ),
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(-0.5, 10),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Column(
-                                              children: [
-                                                Container(
-                                                  width: 90,
-                                                  height: 90,
-                                                  decoration: BoxDecoration(
-                                                    color: Color(0xFF8d79a0),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/gamer.png',
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4.0),
-                                                Text(
-                                                  "PC Gamer",
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Colors.white),
-                                                ),
-                                              ],
-                                            ),
-                                            SizedBox(width: 6.0),
-                                            Column(
-                                              children: [
-                                                Container(
-                                                  width: 90,
-                                                  height: 90,
-                                                  decoration: BoxDecoration(
-                                                    color: Color(0xFF8d79a0),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/clavier.png',
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4.0),
-                                                Text(
-                                                  "Accéssoires",
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Colors.white),
-                                                ),
-                                              ],
-                                            ),
-                                            SizedBox(width: 6.0),
-                                            Column(
-                                              children: [
-                                                Container(
-                                                  width: 90,
-                                                  height: 90,
-                                                  decoration: BoxDecoration(
-                                                    color: Color(0xFF8d79a0),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/son.png',
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4.0),
-                                                Text(
-                                                  "son & Audio",
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Colors.white),
-                                                ),
-                                              ],
+                                            Transform.translate(
+                                              offset: Offset(-0.5, 10),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  // Afficher d'autres nouveautés ici en utilisant les données filtrées
+                                                ],
+                                              ),
                                             ),
                                           ],
-                                        ),
-                                      ),
-                                    ],
+                                        );
+                                      }
+                                    },
                                   ),
-                                ),
+                                )
                               ],
                             ), //fin gaming
 
@@ -960,7 +1092,7 @@ void recherche() async {
                               children: [
                                 Container(
                                     padding: EdgeInsets.symmetric(
-                                        horizontal: 25.0, vertical: 15.0),
+                                        horizontal: 1.0, vertical: 1.0),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -1001,182 +1133,234 @@ void recherche() async {
                                         ),
                                         SizedBox(height: 5),
                                         Container(
-                                          height:220,
-                                          // Hauteur de votre ListView
-                                          child: ListView.builder(
-                                            scrollDirection: Axis.horizontal,
-                                            itemCount: categorie.length,
-                                            itemBuilder: (context, index) {
-                                              return Stack(
-                                                children: [
-                                                  Container(
-                                                    width: 160,
-                                                    // Largeur du conteneur (plus petit que l'image)
-                                                    height: 160,
-                                                    // Hauteur du conteneur (plus petit que l'image)
-                                                    margin:
-                                                        EdgeInsets.symmetric(
-                                                            horizontal: 5),
-                                                    decoration: BoxDecoration(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              20),
-                                                      color: Colors
-                                                          .white, // Couleur de fond blanche pour chaque image
-                                                    ),
-                                                    child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                              horizontal: 1.0, vertical: 1.0),
+                                          child: FutureBuilder<List<dynamic>>(
+                                            future: futureProducts,
+                                            builder: (context, snapshot) {
+                                              if (snapshot.connectionState ==
+                                                  ConnectionState.waiting) {
+                                                return Center(
+                                                    child:
+                                                        CircularProgressIndicator());
+                                              } else if (snapshot.hasError) {
+                                                return Center(
+                                                    child: Text(
+                                                        'Error: ${snapshot.error}'));
+                                              } else {
+                                                final List<dynamic> categorie =
+                                                    snapshot.data!;
+                                                final filteredCategories =
+                                                    categorie
+                                                        .where((item) =>
+                                                            item['type'] ==
+                                                            "offre")
+                                                        .toList();
+
+                                                if (filteredCategories
+                                                    .isEmpty) {
+                                                  return Container(); // Retourner une vue vide si aucune catégorie de type "Top Catégories" n'est trouvée
+                                                }
+
+                                                return Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    SizedBox(height: 10),
+                                                    Container(
                                                       padding:
-                                                          const EdgeInsets.only(
-                                                              top: 5.0),
-                                                      child: ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(20.0),
-                                                        child: Container(
-                                                          margin:
-                                                              EdgeInsets.only(
-                                                                  bottom: 15.0,
-                                                                  left: 5,
-                                                                  right: 5),
-                                                          child: Image.asset(
-                                                            gridMap[index]
-                                                                ['imagePath'],
-                                                            fit: BoxFit.cover,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Positioned(
-                                                    top: 12,
-                                                    left: 10,
-                                                    child: Container(
-                                                      padding:
-                                                          EdgeInsets.all(4),
-                                                      decoration: BoxDecoration(
-                                                        color:
-                                                            Color(0xFFF6D776),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8),
-                                                      ),
-                                                      child: Text(
-                                                        gridMap[index]
-                                                            ['discount'],
-                                                        style: TextStyle(
-                                                          color: Colors.black,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 10,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Padding(
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 12.0),
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Row(
-                                                          children: [
-                                                            Transform.translate(
-                                                              offset: Offset(
-                                                                  -3, 164),
-                                                              child: Text(
-                                                                'TND ',
-                                                                style:
-                                                                    TextStyle(
-                                                                  color: Color(
-                                                                      0xFF006583),
-                                                                  fontSize: 13,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
+                                                          EdgeInsets.symmetric(
+                                                              horizontal: 15.0,
+                                                              vertical: 10.0),
+                                                      child: FutureBuilder<
+                                                          List<dynamic>>(
+                                                        future: futureProducts,
+                                                        builder: (context,
+                                                            snapshot) {
+                                                          if (snapshot
+                                                                  .connectionState ==
+                                                              ConnectionState
+                                                                  .waiting) {
+                                                            return Center(
+                                                                child:
+                                                                    CircularProgressIndicator());
+                                                          } else if (snapshot
+                                                              .hasError) {
+                                                            return Center(
+                                                                child: Text(
+                                                                    'Error: ${snapshot.error}'));
+                                                          } else {
+                                                            final List<dynamic>
+                                                                gridMap =
+                                                                snapshot.data!;
+                                                            final filteredGridMap = gridMap
+                                                                .where((item) =>
+                                                                    item[
+                                                                        'type'] ==
+                                                                    "offre")
+                                                                .toList();
+
+                                                            if (filteredGridMap
+                                                                .isEmpty) {
+                                                              return Container(); // Retourner une vue vide si aucun produit de type "Meilleures Ventes" n'est trouvé
+                                                            }
+
+                                                            return Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                GridView
+                                                                    .builder(
+                                                                  physics:
+                                                                      const NeverScrollableScrollPhysics(),
+                                                                  shrinkWrap:
+                                                                      true,
+                                                                  gridDelegate:
+                                                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                                                    crossAxisCount:
+                                                                        2,
+                                                                    crossAxisSpacing:
+                                                                        10.0,
+                                                                    mainAxisSpacing:
+                                                                        10.0,
+                                                                    mainAxisExtent:
+                                                                        200,
+                                                                  ),
+                                                                  itemCount:
+                                                                      filteredGridMap
+                                                                          .length,
+                                                                  itemBuilder:
+                                                                      (_, index) {
+                                                                    final item =
+                                                                        filteredGridMap[
+                                                                            index];
+                                                                    final isFavorite =
+                                                                        favoriteStates[
+                                                                            index];
+                                                                    final String
+                                                                        imageDataString =
+                                                                        item[
+                                                                            'image']; // Supposons que les données binaires de l'image sont stockées dans un champ 'imageData' sous forme de chaîne de caractères
+
+                                                                    // Convertir la chaîne de caractères en Uint8List
+                                                                    final Uint8List
+                                                                        imageData =
+                                                                        base64Decode(
+                                                                            imageDataString); // Vous devez importer 'dart:convert' pour utiliser base64Decode
+
+                                                                    return GestureDetector(
+                                                                      onTap:
+                                                                          () {
+                                                                        // Gérer l'action de clic sur un produit
+                                                                      },
+                                                                      child:
+                                                                          Container(
+                                                                        decoration:
+                                                                            BoxDecoration(
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(20.0),
+                                                                          color:
+                                                                              Colors.white,
+                                                                          boxShadow: [
+                                                                            BoxShadow(
+                                                                              color: Colors.grey.withOpacity(0.5),
+                                                                              spreadRadius: 2,
+                                                                              blurRadius: 5,
+                                                                              offset: Offset(0, 3), // changes position of shadow
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                        margin:
+                                                                            EdgeInsets.all(8.0),
+                                                                        child:
+                                                                            Column(
+                                                                          crossAxisAlignment:
+                                                                              CrossAxisAlignment.start,
+                                                                          children: [
+                                                                            Padding(
+                                                                              padding: const EdgeInsets.only(right: 8.0, top: 8),
+                                                                              child: Center(
+                                                                                child: Align(
+                                                                                    alignment: Alignment.centerRight,
+                                                                                    child: GestureDetector(
+                                                                                      onTap: () async {
+                                                                                        String? token = await getTokenFromSharedPreferences(); // Récupérer le token de l'utilisateur
+                                                                                        if (token != null) {
+                                                                                          String? userId = await getUserIdFromToken(token); // Récupérer le userId à partir du token
+                                                                                          if (userId != null) {
+                                                                                            // String productId = products[index].id; // Récupérer l'ID du produit à partir de la liste des produits
+                                                                                            toggleFavoriteState(index, userId, item['_id']); // Appeler toggleFavoriteState avec index, userId et productId
+                                                                                          } else {
+                                                                                            print('Impossible de récupérer le userId');
+                                                                                          }
+                                                                                        } else {
+                                                                                          print('Token non trouvé localement');
+                                                                                        }
+                                                                                      },
+                                                                                      child: Image.asset(
+                                                                                        isFavorite ? 'assets/images/cor.png' : 'assets/images/hear.png',
+                                                                                        width: 24,
+                                                                                        height: 24,
+                                                                                      ),
+                                                                                    )),
+                                                                              ),
+                                                                            ),
+                                                                            Expanded(
+                                                                              child: ClipRRect(
+                                                                                borderRadius: BorderRadius.vertical(
+                                                                                  top: Radius.circular(20.0),
+                                                                                ),
+                                                                                child: Image.memory(
+                                                                                  imageData, // Utilisez vos données binaires ici
+                                                                                  fit: BoxFit.cover,
+                                                                                ),
+                                                                              ),
+                                                                            ),
+                                                                            Padding(
+                                                                              padding: const EdgeInsets.all(8.0),
+                                                                              child: Text(
+                                                                                item['title'],
+                                                                                maxLines: 2,
+                                                                                overflow: TextOverflow.ellipsis,
+                                                                                style: TextStyle(
+                                                                                  fontWeight: FontWeight.w500,
+                                                                                  color: Color(0xFF666666),
+                                                                                  fontSize: 14,
+                                                                                ),
+                                                                              ),
+                                                                            ),
+                                                                            Padding(
+                                                                              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                                                              child: Row(
+                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                children: [
+                                                                                  Text(
+                                                                                    'TND ${item['price']}',
+                                                                                    style: TextStyle(
+                                                                                      color: Color(0xFF006583),
+                                                                                      fontSize: 16,
+                                                                                      fontWeight: FontWeight.bold,
+                                                                                    ),
+                                                                                  ),
+                                                                                ],
+                                                                              ),
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                      ),
+                                                                    );
+                                                                  },
                                                                 ),
-                                                              ),
-                                                            ),
-                                                            SizedBox(width: 2),
-                                                            Transform.translate(
-                                                              offset: Offset(
-                                                                  -4, 162),
-                                                              child: Text(
-                                                                gridMap[index][
-                                                                        'price']
-                                                                    .substring(
-                                                                        3),
-                                                                style:
-                                                                    TextStyle(
-                                                                  color: Color(
-                                                                      0xFF006583),
-                                                                  fontSize: 20,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                            Transform.translate(
-                                                              offset: Offset(
-                                                                  1, 164),
-                                                              child: Text(
-                                                                'TND ${_calculateDiscountedPrice(gridMap[index]['price'], gridMap[index]['discount'])}',
-                                                                style:
-                                                                    TextStyle(
-                                                                  decoration:
-                                                                      TextDecoration
-                                                                          .lineThrough,
-                                                                  decorationColor:
-                                                                      Colors
-                                                                          .red,
-                                                                  color: Colors
-                                                                      .grey,
-                                                                  fontSize: 10,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        Transform.translate(
-                                                          offset:
-                                                              Offset(-2, 160),
-                                                          child: Text(
-                                                            gridMap[index]
-                                                                ['title'],
-                                                            style: TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w500,
-                                                              color: Color(
-                                                                  0xFF666666),
-                                                              fontSize: 10,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        Transform.translate(
-                                                          offset:
-                                                              Offset(117, 128),
-                                                          child: IconButton(
-                                                            onPressed: () {
-                                                              // Action à effectuer lors du clic sur l'icône du panier
-                                                            },
-                                                            icon: Icon(
-                                                              CupertinoIcons
-                                                                  .cart,
-                                                              size: 18,
-                                                              color: Color(
-                                                                  0xFF006583), // Couleur de l'icône du panier
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              );
+                                                              ],
+                                                            );
+                                                          }
+                                                        },
+                                                      ),
+                                                    )
+                                                  ],
+                                                );
+                                              }
                                             },
                                           ),
                                         ),
@@ -1190,66 +1374,89 @@ void recherche() async {
                               children: [
                                 Container(
                                   margin: EdgeInsets.only(right: 14.0),
-                                  // Margin right ajouté
-                                  decoration: BoxDecoration(
+                                  decoration: const BoxDecoration(
                                     color: Color(0xFFADC1BC),
-                                    // Couleur de fond du Container
                                     borderRadius: BorderRadius.only(
                                       topRight: Radius.circular(50.0),
-                                      // Border radius coin supérieur droit
-                                      bottomRight: Radius.circular(
-                                          50.0), // Border radius coin inférieur droit
+                                      bottomRight: Radius.circular(50.0),
                                     ),
                                   ),
-                                  height: 590,
-                                  padding: EdgeInsets.symmetric(
+                                  height: 430,
+                                  padding: const EdgeInsets.symmetric(
                                       horizontal: 28.0, vertical: 15.0),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "Notre sélection",
-                                        style: TextStyle(
-                                          fontSize: 25.0,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      GestureDetector(
-                                        onTap: () {
-                                          // Action à effectuer lorsque le bouton "Voir plus" est pressé
-                                        },
-                                        child: Row(
+                                  child: FutureBuilder<List<dynamic>>(
+                                    future: futureProducts,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState ==
+                                          ConnectionState.waiting) {
+                                        return Center(
+                                            child: CircularProgressIndicator());
+                                      } else if (snapshot.hasError) {
+                                        return Center(
+                                            child: Text(
+                                                'Error: ${snapshot.error}'));
+                                      } else {
+                                        final List<dynamic> nouveautes =
+                                            snapshot.data!;
+                                        final List<dynamic> filteredNouveautes =
+                                            nouveautes
+                                                .where((item) =>
+                                                    item['type'] ==
+                                                    'notre selection')
+                                                .toList();
+
+                                        if (filteredNouveautes.isEmpty) {
+                                          return Container(); // Retourner une vue vide si aucune nouveauté n'est trouvée
+                                        }
+
+                                        // Convertir la chaîne de caractères en Uint8List
+                                        final Uint8List imageData =
+                                            base64Decode(
+                                                filteredNouveautes[0]['image']);
+
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
+                                            const Text(
+                                              "Notre sélection",
+                                              style: TextStyle(
+                                                fontSize: 25.0,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            SizedBox(
+                                              height: 20,
+                                            ),
                                             Transform.translate(
                                               offset: Offset(0, -14),
-                                              child: Text(
-                                                "Voir plus",
-                                                style: TextStyle(
-                                                  fontSize: 13.0,
-                                                  fontWeight: FontWeight.bold,
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(10.0),
+                                                child: Image.memory(
+                                                  imageData,
+                                                  width: 100,
+                                                  fit: BoxFit.cover,
                                                 ),
                                               ),
                                             ),
                                             Transform.translate(
-                                              offset: Offset(0, -14),
-                                              child: IconButton(
-                                                onPressed: () {
-                                                  // Action à effectuer lorsque le bouton IconButton est pressé
-                                                },
-                                                icon: Icon(Icons.arrow_forward),
+                                              offset: Offset(-0.5, 10),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  // Afficher d'autres nouveautés ici en utilisant les données filtrées
+                                                ],
                                               ),
                                             ),
                                           ],
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(0, -10),
-                                        child: GridA(),
-                                      ),
-                                    ],
+                                        );
+                                      }
+                                    },
                                   ),
-                                ),
+                                )
                               ],
                             ), //fin selection
 
@@ -1289,198 +1496,100 @@ void recherche() async {
                               children: [
                                 Container(
                                   margin: EdgeInsets.only(left: 14.0),
-                                  // Margin right ajouté
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF00A3FF).withOpacity(0.43),
-                                    // Couleur de fond du Container
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF00A3FF),
                                     borderRadius: BorderRadius.only(
                                       topLeft: Radius.circular(50.0),
-                                      // Border radius coin supérieur droit
-                                      bottomLeft: Radius.circular(
-                                          50.0), // Border radius coin inférieur droit
+                                      bottomLeft: Radius.circular(50.0),
                                     ),
                                   ),
-                                  height: 450,
-                                  padding: EdgeInsets.symmetric(
+                                  height: 430,
+                                  padding: const EdgeInsets.symmetric(
                                       horizontal: 28.0, vertical: 15.0),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Transform.translate(
-                                        offset: Offset(-1, 0),
-                                        child: Text(
-                                          "Electroménager",
-                                          style: TextStyle(
-                                            fontSize: 25.0,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(0, -4),
-                                        child: Text(
-                                          "Découvrez notre gamme d'électroménagers intelligents",
-                                          style: TextStyle(
-                                            fontSize: 12.0,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ),
-                                      GestureDetector(
-                                        onTap: () {
-                                          // Action à effectuer lorsque le bouton "Voir plus" est pressé
-                                        },
-                                        child: Row(
+                                  child: FutureBuilder<List<dynamic>>(
+                                    future: futureProducts,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState ==
+                                          ConnectionState.waiting) {
+                                        return Center(
+                                            child: CircularProgressIndicator());
+                                      } else if (snapshot.hasError) {
+                                        return Center(
+                                            child: Text(
+                                                'Error: ${snapshot.error}'));
+                                      } else {
+                                        final List<dynamic> nouveautes =
+                                            snapshot.data!;
+                                        final List<dynamic> filteredNouveautes =
+                                            nouveautes
+                                                .where((item) =>
+                                                    item['type'] ==
+                                                    'electromenager')
+                                                .toList();
+
+                                        if (filteredNouveautes.isEmpty) {
+                                          return Container(); // Retourner une vue vide si aucune nouveauté n'est trouvée
+                                        }
+
+                                        // Convertir la chaîne de caractères en Uint8List
+                                        final Uint8List imageData =
+                                            base64Decode(
+                                                filteredNouveautes[0]['image']);
+
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
+                                            const Text(
+                                              "Électroménager",
+                                              style: TextStyle(
+                                                fontSize: 25.0,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                             Transform.translate(
-                                              offset: Offset(0, -14),
-                                              child: Text(
-                                                "Voir plus",
+                                              offset: Offset(0, -4),
+                                              child: const Text(
+                                                "Découvrez notre gamme d'électroménagers intelligents",
                                                 style: TextStyle(
                                                   fontSize: 12.0,
                                                   fontWeight: FontWeight.w600,
-                                                  color: Colors.white,
+                                                  color: Color(0xFF666666),
                                                 ),
                                               ),
                                             ),
-                                            SizedBox(width: 5.0),
-                                            // Espacement entre le texte et l'icône
+                                            SizedBox(
+                                              height: 20,
+                                            ),
                                             Transform.translate(
                                               offset: Offset(0, -14),
-                                              child: IconButton(
-                                                onPressed: () {
-                                                  // Action à effectuer lorsque le bouton IconButton est pressé
-                                                },
-                                                icon: Image.asset(
-                                                  'assets/images/blanc.png',
-                                                  width: 20,
-                                                  // Ajustez la largeur selon vos besoins
-                                                  height:
-                                                      20, // Ajustez la hauteur selon vos besoins
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(10.0),
+                                                child: Image.memory(
+                                                  imageData,
+                                                  width: 100,
+                                                  fit: BoxFit.cover,
                                                 ),
                                               ),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(0, -14),
-                                        child: ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(10.0),
-                                          // Rayon du border radius pour l'image
-                                          child: Image.asset(
-                                            'assets/images/electro1.png',
-                                            // Chemin de l'image
-                                            fit: BoxFit
-                                                .cover, // Redimensionner l'image pour couvrir toute la largeur
-                                          ),
-                                        ),
-                                      ),
-                                      Transform.translate(
-                                        offset: Offset(-0.5, 10),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Column(
-                                              children: [
-                                                Container(
-                                                  width: 90,
-                                                  height: 90,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/electro2.png',
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4.0),
-                                                Text(
-                                                  "Gros électro",
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Colors.white),
-                                                ),
-                                              ],
-                                            ),
-                                            SizedBox(width: 6.0),
-                                            Column(
-                                              children: [
-                                                Container(
-                                                  width: 90,
-                                                  height: 90,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/electro3.png',
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4.0),
-                                                Text(
-                                                  "Machine à café",
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Colors.white),
-                                                ),
-                                              ],
-                                            ),
-                                            SizedBox(width: 6.0),
-                                            Column(
-                                              children: [
-                                                Container(
-                                                  width: 90,
-                                                  height: 90,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/electro4.png',
-                                                    width: 20,
-                                                    height: 20,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4.0),
-                                                Text(
-                                                  "Robot de cuisine",
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      color: Colors.white),
-                                                ),
-                                              ],
+                                            Transform.translate(
+                                              offset: Offset(-0.5, 10),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  // Afficher d'autres nouveautés ici en utilisant les données filtrées
+                                                ],
+                                              ),
                                             ),
                                           ],
-                                        ),
-                                      ),
-                                    ],
+                                        );
+                                      }
+                                    },
                                   ),
-                                ),
+                                )
                               ],
                             ), //fin electro
 
@@ -1551,8 +1660,8 @@ void recherche() async {
                                                           BorderRadius.circular(
                                                               20.0),
                                                       child: Container(
-                                                        width: Brands[index][
-                                                            'width'], // Utilisation de la largeur spécifique
+                                                        width: Brands[index]
+                                                            ['width'],
                                                         height: Brands[index]
                                                             ['height'],
                                                         margin: EdgeInsets.only(
@@ -1595,12 +1704,6 @@ void recherche() async {
           selectedLabelStyle: TextStyle(color: Color(0xFF006E7F)),
           type: BottomNavigationBarType.fixed,
           items: [
-            bottomNavigationBarItem(
-              image: 'assets/images/pani.png',
-              label: 'Panier',
-              context: context,
-              page: PanierPage(),
-            ),
             bottomNavigationBarItem(
               image: 'assets/images/recherche.png',
               label: 'Recherche',
@@ -1730,7 +1833,7 @@ class _GridBState extends State<GridB> {
 
   Future<List<dynamic>> getProducts() async {
     final response =
-        await http.get(Uri.parse("http://192.168.1.22:3003/product/products"));
+        await http.get(Uri.parse("http://192.168.1.17:3003/product/products"));
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List<dynamic>;
@@ -1759,13 +1862,21 @@ class _GridBState extends State<GridB> {
           return Center(child: Text('Error: ${snapshot.error}'));
         } else {
           final List<dynamic> gridMap = snapshot.data!;
+          final filteredGridMap = gridMap
+              .where((item) => item['type'] == "Meilleurs ventes")
+              .toList();
+
+          if (filteredGridMap.isEmpty) {
+            return Container(); // Retourner une vue vide si aucun produit de type "Meilleures Ventes" n'est trouvé
+          }
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
+              const Padding(
+                padding: EdgeInsets.all(8.0),
                 child: Text(
-                  "Meilleures Ventes",
+                  "Meilleurs ventes",
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -1779,15 +1890,39 @@ class _GridBState extends State<GridB> {
                   crossAxisCount: 2,
                   crossAxisSpacing: 10.0,
                   mainAxisSpacing: 10.0,
-                  mainAxisExtent: 180,
+                  mainAxisExtent: 200,
                 ),
-                itemCount: gridMap.length,
+                itemCount: filteredGridMap.length,
                 itemBuilder: (_, index) {
-                  final item = gridMap[index];
+                  final item = filteredGridMap[index];
                   final isFavorite = favoriteStates[index];
+                  final String imageDataString = item[
+                      'image']; // Supposons que les données binaires de l'image sont stockées dans un champ 'imageData' sous forme de chaîne de caractères
+
+                  // Convertir la chaîne de caractères en Uint8List
+                  final Uint8List imageData = base64Decode(
+                      imageDataString); // Vous devez importer 'dart:convert' pour utiliser base64Decode
+
                   return GestureDetector(
                     onTap: () {
-                      // Gérer l'action de clic sur un produit
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProductPage(
+                            title: item['title'],
+                            id: item['_id'],
+                            name: item['name'],
+                            description: item['description'],
+                            price: item['price'],
+                            brands: item['brands'],
+                            cupons: item['cupons'],
+                            disponibilite: item['disponibilite'],
+                            caracteristique: item['caracteristique'],
+                            image: item['image'],
+                            type: item['type'],
+                          ),
+                        ),
+                      );
                     },
                     child: Container(
                       decoration: BoxDecoration(
@@ -1807,7 +1942,7 @@ class _GridBState extends State<GridB> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.only(right: 8.0,top: 8),
+                            padding: const EdgeInsets.only(right: 8.0, top: 8),
                             child: Center(
                               child: Align(
                                 alignment: Alignment.centerRight,
@@ -1831,10 +1966,10 @@ class _GridBState extends State<GridB> {
                               borderRadius: BorderRadius.vertical(
                                 top: Radius.circular(20.0),
                               ),
-                              // child: Image.network(
-                              //   item['imagePath'],
-                              //   fit: BoxFit.cover,
-                              // ),
+                              child: Image.memory(
+                                imageData, // Utilisez vos données binaires ici
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                           Padding(
@@ -1864,7 +1999,6 @@ class _GridBState extends State<GridB> {
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                               
                               ],
                             ),
                           ),
@@ -1878,187 +2012,6 @@ class _GridBState extends State<GridB> {
           );
         }
       },
-    );
-  }
-}
-
-class GridA extends StatefulWidget {
-  const GridA({Key? key}) : super(key: key);
-
-  @override
-  _GridAState createState() => _GridAState();
-}
-
-class _GridAState extends State<GridA> {
-  late List<bool> showFullTitles;
-  late List<bool> favoriteStates;
-
-  @override
-  void initState() {
-    super.initState();
-    // Initialiser la liste showFullTitles avec des valeurs par défaut à false
-    showFullTitles = List.generate(4, (_) => false);
-    favoriteStates = List.generate(4, (_) => false);
-  }
-
-  void toggleFavoriteState(int index) {
-    setState(() {
-      favoriteStates[index] = !favoriteStates[index];
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> gridMap = [
-      {
-        "price": "TND299",
-        "title": "Cecotec blender power",
-        "imagePath": "assets/images/select1(1).jpg",
-      },
-      {
-        "title": "Casque celly kidsbeat ",
-        "price": "TND42",
-        "imagePath": "assets/images/select2.jpg",
-      },
-      {
-        "title": "Smartphone IKU A6",
-        "price": "TND191",
-        "imagePath": "assets/images/select3.jpg",
-      },
-      {
-        "title": "Carte mere MSI B560M-A",
-        "price": "TND299",
-        "imagePath": "assets/images/select4.jpg",
-      },
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          shrinkWrap: true,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 10.0,
-            mainAxisSpacing: 0.0,
-            mainAxisExtent: 235,
-          ),
-          itemCount: gridMap.length > 4 ? 4 : gridMap.length,
-          itemBuilder: (_, index) {
-            final item = gridMap[index];
-
-            final isFavorite = favoriteStates[index];
-            return GestureDetector(
-              onTap: () {
-                // Utilisez Navigator.push pour naviguer vers la page produit
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProductPage(item['imagePath']),
-                  ),
-                );
-              },
-              child: Container(
-                margin: EdgeInsets.only(top: 1.0),
-                child: Stack(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          height: 180,
-                          width: 300,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 10.0),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(20.0),
-                                bottom: Radius.circular(30.0),
-                              ),
-                              child: Container(
-                                margin: EdgeInsets.only(bottom: 10.0),
-                                child: Image.asset(
-                                  item['imagePath'],
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Transform.translate(
-                                    offset: Offset(-7, -2),
-                                    child: Text(
-                                      'TND ',
-                                      style: TextStyle(
-                                        color: Color(0xFF006583),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 2),
-                                  Transform.translate(
-                                    offset: Offset(-9, -2),
-                                    child: Text(
-                                      item['price'].substring(3),
-                                      style: TextStyle(
-                                        color: Color(0xFF006583),
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Transform.translate(
-                                offset: Offset(-6, -1),
-                                child: Text(
-                                  item['title'],
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFF666666),
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Positioned(
-                      top:
-                          17, // Ajustez la position supérieure de l'icône de cœur
-                      right: 10,
-                      child: GestureDetector(
-                        onTap: () {
-                          // Appel de la méthode pour basculer l'état du produit favori
-                          toggleFavoriteState(index);
-                        },
-                        child: Image.asset(
-                          isFavorite
-                              ? 'assets/images/cor.png'
-                              : 'assets/images/hear.png', // Changez le chemin de l'image en fonction de l'état du produit favori
-                          width: 22,
-                          height: 22,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
     );
   }
 }
@@ -2128,389 +2081,166 @@ class _GriAState extends State<GriA> {
       },
     ];
 
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      shrinkWrap: true,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10.0,
-        mainAxisSpacing: 0.0,
-        mainAxisExtent: 250,
-      ),
-      itemCount: gridMap.length,
-      itemBuilder: (_, index) {
-        final item = gridMap[index];
+    late List<bool> favoriteStates;
+    Future<List<dynamic>> getProducts() async {
+      final response = await http
+          .get(Uri.parse("http://192.168.1.17:3003/product/products"));
 
-        final isFavorite = favoriteStates[index];
-        return GestureDetector(
-          onTap: () {
-            // Utilisez Navigator.push pour naviguer vers la page produit
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProductPage(item['imagePath']),
-              ),
-            );
-          },
-          child: Container(
-            margin: EdgeInsets.only(top: 1.0),
-            child: Stack(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      height: 180,
-                      width: 300,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 10.0),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(20.0),
-                            bottom: Radius.circular(30.0),
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List<dynamic>;
+        favoriteStates = List.generate(data.length, (_) => false);
+        return data;
+      } else {
+        throw Exception('Failed to get data: ${response.statusCode}');
+      }
+    }
+
+    late Future<List<dynamic>> futureProducts =
+        getProducts(); // Initialisation directe
+
+    @override
+    void initState() {
+      super.initState();
+      favoriteStates = [];
+    }
+
+    void toggleFavoriteState(int index) {
+      setState(() {
+        favoriteStates[index] = !favoriteStates[index];
+      });
+    }
+
+    return FutureBuilder<List<dynamic>>(
+      future: futureProducts,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        } else {
+          final List<dynamic> gridMap = snapshot.data!;
+          final filteredGridMap =
+              gridMap.where((item) => item['type'] == "tendance").toList();
+
+          if (filteredGridMap.isEmpty) {
+            return Container(); // Retourner une vue vide si aucun produit de type "Meilleures Ventes" n'est trouvé
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10.0,
+                  mainAxisSpacing: 10.0,
+                  mainAxisExtent: 200,
+                ),
+                itemCount: filteredGridMap.length,
+                itemBuilder: (_, index) {
+                  final item = filteredGridMap[index];
+                  final isFavorite = favoriteStates[index];
+                  final String imageDataString = item[
+                      'image']; // Supposons que les données binaires de l'image sont stockées dans un champ 'imageData' sous forme de chaîne de caractères
+
+                  // Convertir la chaîne de caractères en Uint8List
+                  final Uint8List imageData = base64Decode(
+                      imageDataString); // Vous devez importer 'dart:convert' pour utiliser base64Decode
+
+                  return GestureDetector(
+                    onTap: () {
+                      // Gérer l'action de clic sur un produit
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20.0),
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.5),
+                            spreadRadius: 2,
+                            blurRadius: 5,
+                            offset: Offset(0, 3), // changes position of shadow
                           ),
-                          child: Container(
-                            margin: EdgeInsets.only(bottom: 10.0),
-                            child: Image.asset(
-                              item['imagePath'],
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                      margin: EdgeInsets.all(8.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Transform.translate(
-                                offset: Offset(-7, -2),
-                                child: Text(
-                                  'TND ',
-                                  style: TextStyle(
-                                    color: Color(0xFF006583),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8.0, top: 8),
+                            child: Center(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    toggleFavoriteState(index);
+                                  },
+                                  child: Image.asset(
+                                    isFavorite
+                                        ? 'assets/images/cor.png'
+                                        : 'assets/images/hear.png',
+                                    width: 24,
+                                    height: 24,
                                   ),
                                 ),
                               ),
-                              SizedBox(width: 2),
-                              Transform.translate(
-                                offset: Offset(-9, -2),
-                                child: Text(
-                                  item['price'].substring(3),
-                                  style: TextStyle(
-                                    color: Color(0xFF006583),
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              Transform.translate(
-                                offset: Offset(-2, -1),
-                                child: Text(
-                                  'TND ${_calculateDiscountedPrice(item['price'], item['discount'])}',
-                                  style: TextStyle(
-                                    decoration: TextDecoration.lineThrough,
-                                    decorationColor: Colors.red,
-                                    color: Colors.grey,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                          Transform.translate(
-                            offset: Offset(-6, -1),
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(20.0),
+                              ),
+                              child: Image.memory(
+                                imageData, // Utilisez vos données binaires ici
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
                             child: Text(
                               item['title'],
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontWeight: FontWeight.w500,
                                 color: Color(0xFF666666),
-                                fontSize: 10,
+                                fontSize: 14,
                               ),
+                            ),
+                          ),
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'TND ${item['price']}',
+                                  style: TextStyle(
+                                    color: Color(0xFF006583),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-                Positioned(
-                  top: 17,
-                  left: 6,
-                  child: Container(
-                    padding: EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Color(0xFFF6D776),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      item['discount'],
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 17, // Ajustez la position supérieure de l'icône de cœur
-                  right: 10,
-                  child: GestureDetector(
-                    onTap: () {
-                      // Appel de la méthode pour basculer l'état du produit favori
-                      toggleFavoriteState(index);
-                    },
-                    child: Image.asset(
-                      isFavorite
-                          ? 'assets/images/cor.png'
-                          : 'assets/images/hear.png', // Changez le chemin de l'image en fonction de l'état du produit favori
-                      width: 22,
-                      height: 22,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+                  );
+                },
+              ),
+            ],
+          );
+        }
       },
-    );
-  }
-
-  String _calculateDiscountedPrice(String price, String discount) {
-    double originalPrice = double.parse(price.substring(3));
-    double discountPercentage = double.parse(discount.replaceAll('%', ''));
-    double discountedPrice =
-        originalPrice - (originalPrice * discountPercentage / 100);
-    return discountedPrice.toStringAsFixed(1);
-  }
-}
-
-class Grid extends StatefulWidget {
-  const Grid({Key? key}) : super(key: key);
-
-  @override
-  _GridState createState() => _GridState();
-}
-
-class _GridState extends State<Grid> {
-  late List<bool> showFullTitles;
-  late List<bool> favoriteStates;
-
-  Future<List<dynamic>> getFunction(String url) async {
-    final response = await http.get(Uri.parse(url));
-
-    if (response.statusCode == 200) {
-      final decodedData = jsonDecode(response.body) as List<dynamic>;
-      return decodedData;
-    } else {
-      throw Exception('Failed to get data: ${response.statusCode}');
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    // Initialiser la liste showFullTitles avec des valeurs par défaut à false
-    showFullTitles = List.generate(6, (_) => false);
-    favoriteStates = List.generate(6, (_) => false);
-  }
-
-  void toggleFavoriteState(int index) {
-    setState(() {
-      favoriteStates[index] = !favoriteStates[index];
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> gridMap = [
-      {
-        "price": "TND219",
-        "title": "Hachoir à Viande Touch",
-        "imagePath": "assets/images/ramadhan1.jpg",
-        "discount": "-24%",
-      },
-      {
-        "title": "KONIX DRAKKAR pack sorcerer",
-        "price": "TND68",
-        "imagePath": "assets/images/manette.jpg",
-        "discount": "-34%",
-      },
-      {
-        "title": "Montre connecté LINWEAR  ",
-        "price": "TND149",
-        "imagePath": "assets/images/montre.png",
-        "discount": "-54%",
-      },
-      {
-        "title": "Whirpool hotte murale",
-        "price": "TND499",
-        "imagePath": "assets/images/hotte.jpg",
-        "discount": "-30%",
-      },
-      {
-        "price": "TND799",
-        "title": "TV SAMSUNG 32'' SMART-LED ",
-        "imagePath": "assets/images/img1.jpg",
-        "discount": "-11%",
-      },
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: 270,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: gridMap.length,
-            itemBuilder: (_, index) {
-              final isFavorite = favoriteStates[index];
-              return Stack(
-                children: [
-                  Container(
-                    width: 160,
-                    height: 160,
-                    margin: EdgeInsets.symmetric(horizontal: 5),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      color: Colors.white,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 5.0),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20.0),
-                        child: Container(
-                          margin:
-                              EdgeInsets.only(bottom: 15.0, left: 5, right: 5),
-                          child: Image.asset(
-                            gridMap[index]['imagePath'],
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: Container(
-                      padding: EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFF6D776),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        gridMap[index]['discount'],
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top:
-                        10, // Ajustez la position supérieure de l'icône de cœur
-                    right: 10,
-                    child: GestureDetector(
-                      onTap: () {
-                        // Appel de la méthode pour basculer l'état du produit favori
-                        toggleFavoriteState(index);
-                      },
-                      child: Image.asset(
-                        isFavorite
-                            ? 'assets/images/cor.png'
-                            : 'assets/images/hear.png', // Changez le chemin de l'image en fonction de l'état du produit favori
-                        width: 22,
-                        height: 22,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Transform.translate(
-                              offset: Offset(-3, 164),
-                              child: Text(
-                                'TND ',
-                                style: TextStyle(
-                                  color: Color(0xFF006583),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 2),
-                            Transform.translate(
-                              offset: Offset(-4, 162),
-                              child: Text(
-                                gridMap[index]['price'].substring(3),
-                                style: TextStyle(
-                                  color: Color(0xFF006583),
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            Transform.translate(
-                              offset: Offset(1, 164),
-                              child: Text(
-                                'TND ${_calculateDiscountedPrice(gridMap[index]['price'], gridMap[index]['discount'])}',
-                                style: TextStyle(
-                                  decoration: TextDecoration.lineThrough,
-                                  decorationColor: Colors.red,
-                                  color: Colors.grey,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Transform.translate(
-                          offset: Offset(-2, 160),
-                          child: Text(
-                            gridMap[index]['title'],
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF666666),
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                        Transform.translate(
-                          offset: Offset(117, 110),
-                          child: IconButton(
-                            onPressed: () {},
-                            icon: Icon(
-                              CupertinoIcons.cart,
-                              size: 18,
-                              color: Color(
-                                  0xFF006583), // Couleur de l'icône du panier
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:untitled2/page/favoris.dart';
 import 'package:untitled2/page/mdp.dart';
 import 'package:untitled2/page/page/adesse.dart';
-import 'package:untitled2/page/page/panier.dart';
 import 'package:untitled2/page/sidebar.dart';
 
 void main() {
@@ -58,23 +57,23 @@ class Profile extends StatelessWidget {
                   subtitle: 'Définir l\'adresse de livraison d\'achat',
                   leadingIcon: 'assets/icons/local.png',
                   onTap: () {
-                   Navigator.push(
+                    Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => AdressePage()),
                     );
                   },
                 ),
-                ListTileWithEditButton(
-                  title: 'Mon panier',
-                  subtitle: 'Ajouter supprimer le produit et passer a la caisse',
-                  leadingIcon: 'assets/icons/panier1.png',
-                  onTap: () {
-                   Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => PanierPage()),
-                    );
-                  },
-                ),
+                // ListTileWithEditButton(
+                //   title: 'Mon panier',
+                //   subtitle: 'Ajouter supprimer le produit et passer a la caisse',
+                //   leadingIcon: 'assets/icons/panier1.png',
+                //   onTap: () {
+                //    Navigator.push(
+                //       context,
+                //       MaterialPageRoute(builder: (context) => PanierPage()),
+                //     );
+                //   },
+                // ),
                 ListTileWithEditButton(
                   title: 'Mes commandes',
                   subtitle: 'commades en cours et terminé',
@@ -89,7 +88,8 @@ class Profile extends StatelessWidget {
                 ),
                 ListTileWithEditButton(
                   title: 'Favoris',
-                  subtitle: 'retirer le solde sur un compte bancaire enregistré',
+                  subtitle:
+                      'retirer le solde sur un compte bancaire enregistré',
                   leadingIcon: 'assets/icons/favoris.png',
                   onTap: () {
                     // Action to perform when "Favoris" is clicked
@@ -172,14 +172,3 @@ class ListTileWithEditButton extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-
-
-
-
-
-
